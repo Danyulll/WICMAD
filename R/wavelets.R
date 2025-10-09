@@ -33,13 +33,21 @@ wt_forward_mat <- function(y_mat, wf="la8", J=NULL, boundary="periodic") {
 precompute_wavelets <- function(Y_list, wf, J, boundary) {
   lapply(Y_list, function(mat) wt_forward_mat(mat, wf, J, boundary))
 }
-stack_D_from_precomp <- function(precomp, idx, M) {
+stack_D_from_precomp <- function(precomp, idx, M, bias_coeff = NULL) {
   ncoeff <- length(precomp[[ idx[1] ]][[1]]$coeff)
   N <- length(idx)
   D_arr <- array(NA_real_, dim=c(ncoeff, N, M))
   for (jj in seq_along(idx)) {
     i <- idx[jj]
-    for (m in 1:M) D_arr[, jj, m] <- precomp[[i]][[m]]$coeff
+    for (m in 1:M) {
+      D_arr[, jj, m] <- precomp[[i]][[m]]$coeff
+      if (!is.null(bias_coeff)) {
+        bc <- bias_coeff[[m]]
+        if (!is.null(bc) && length(bc) == ncoeff) {
+          D_arr[, jj, m] <- D_arr[, jj, m] - bc
+        }
+      }
+    }
   }
   maps <- precomp[[ idx[1] ]]
   list(D_arr = D_arr, maps = maps)

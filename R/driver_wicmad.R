@@ -1,4 +1,6 @@
 #' WICMAD main model (DP–ICM–GP with Besov wavelet block)
+#' @param mean_intercept logical; if `TRUE` (default) include and sample a per-channel intercept
+#'   in each cluster while disabling bias-augmented kernel variants.
 #' @export
 wicmad <- function(
     Y, t,
@@ -16,7 +18,8 @@ wicmad <- function(
     a_eta = 2, b_eta = 0.1,
     diagnostics = TRUE,
     track_ids = NULL,
-    monitor_levels = NULL
+    monitor_levels = NULL,
+    mean_intercept = TRUE
 ) {
   suppressPackageStartupMessages({
     requireNamespace("waveslim")
@@ -56,7 +59,7 @@ wicmad <- function(
     }
   }
   
-  kernels <- make_kernels(add_bias_variants = TRUE)
+  kernels <- make_kernels(add_bias_variants = !isTRUE(mean_intercept))
   alpha <- rgamma(1, shape = alpha_prior[1], rate = alpha_prior[2])
   v     <- rbeta(K_init, 1, alpha)
   pi    <- stick_to_pi(v)
@@ -108,6 +111,21 @@ wicmad <- function(
   message(sprintf("Starting MCMC (N=%d, P=%d, M=%d, iters=%d; burn=%d, thin=%d, keep=%d)",
                   N, P, M, n_iter, burn, thin, keep))
   
+  add_bias_to_mu <- function(mu_wave, bias_vec) {
+    if (!isTRUE(mean_intercept)) return(mu_wave)
+    if (length(bias_vec) == 0) return(mu_wave)
+    mu_wave + matrix(rep(bias_vec, each = nrow(mu_wave)), nrow(mu_wave), length(bias_vec))
+  }
+
+  bias_to_wavelet <- function(bias_vec) {
+    if (!isTRUE(mean_intercept)) return(NULL)
+    if (length(bias_vec) == 0L) return(NULL)
+    if (!any(abs(bias_vec) > 1e-12)) return(NULL)
+    bias_mat <- matrix(rep(bias_vec, each = P), nrow = P, ncol = M)
+    fw <- wt_forward_mat(bias_mat, wf, J, boundary)
+    lapply(fw, function(comp) comp$coeff)
+  }
+
   ll_curve_k <- function(k, Yi, mu_k) {
     kc <- kernels[[ params[[k]]$kern_idx ]]
     kp <- params[[k]]$thetas[[ params[[k]]$kern_idx ]]
@@ -115,6 +133,30 @@ wicmad <- function(
     params[[k]]$cache <<- cache
     y_resid <- Yi - mu_k
     fast_icm_loglik_curve(y_resid, cache)
+  }
+
+  sample_bias <- function(k, idx, mu_wave) {
+    if (!isTRUE(mean_intercept) || length(idx) == 0L) return(params[[k]]$bias)
+    bias_cur <- params[[k]]$bias
+    bias_sd <- 5
+    prior_prec <- if (bias_sd > 0) 1 / (bias_sd^2) else 0
+    for (m in seq_len(M)) {
+      eta_m <- params[[k]]$eta[m]
+      if (!is.finite(eta_m) || eta_m <= 0) eta_m <- 1e-6
+      resid_sum <- 0
+      for (ii in idx) {
+        resid_sum <- resid_sum + sum(Y[[ii]][, m] - mu_wave[, m])
+      }
+      like_prec <- length(idx) * P / eta_m
+      post_prec <- like_prec + prior_prec
+      if (post_prec <= 0) {
+        bias_cur[m] <- 0
+      } else {
+        post_mean <- (resid_sum / eta_m) / post_prec
+        bias_cur[m] <- rnorm(1, post_mean, sqrt(1 / post_prec))
+      }
+    }
+    bias_cur
   }
   
   # ---- Record K_occ every iteration to make progress averaging bulletproof
@@ -149,9 +191,10 @@ wicmad <- function(
         k <- S[ss]
         if (is.null(params[[k]]$mu_cached) || is.null(params[[k]]$mu_cached_iter) ||
             params[[k]]$mu_cached_iter != iter) {
-          mu_k <- if (!is.null(params[[k]]$beta_ch) && length(params[[k]]$beta_ch)) {
+          mu_wave <- if (!is.null(params[[k]]$beta_ch) && length(params[[k]]$beta_ch)) {
             compute_mu_from_beta(params[[k]]$beta_ch, wf, J, boundary, P)
           } else matrix(0, P, M)
+          mu_k <- add_bias_to_mu(mu_wave, params[[k]]$bias)
           params[[k]]$mu_cached <- as_num_mat(mu_k)
           params[[k]]$mu_cached_iter <- iter
         }
@@ -172,6 +215,11 @@ wicmad <- function(
     for (k in 1:K) {
       idx <- which(z == k)
       if (!length(idx)) next
+      if (isTRUE(mean_intercept)) {
+        mu_wave_cur <- compute_mu_from_beta(params[[k]]$beta_ch, wf, J, boundary, P)
+        params[[k]]$bias <- sample_bias(k, idx, mu_wave_cur)
+      }
+      bias_coeff <- if (isTRUE(mean_intercept)) bias_to_wavelet(params[[k]]$bias) else NULL
       upd <- update_cluster_wavelet_params_besov(
         idx = idx, precomp = precomp_all, M = M,
         wpar = params[[k]]$wpar,
@@ -179,17 +227,22 @@ wicmad <- function(
         tau_sigma = params[[k]]$tau_sigma,
         kappa_pi = kappa_pi, c2 = c2, tau_pi = tau_pi,
         g_hyp = params[[k]]$g_hyp,
-        a_sig = a_sig, b_sig = b_sig, a_tau = a_tau, b_tau = b_tau
+        a_sig = a_sig, b_sig = b_sig, a_tau = a_tau, b_tau = b_tau,
+        bias_coeff = bias_coeff
       )
       params[[k]]$wpar       <- upd$wpar
       params[[k]]$beta_ch    <- upd$beta_ch
       params[[k]]$sigma2     <- upd$sigma2_m
       params[[k]]$tau_sigma  <- upd$tau_sigma
-      
-      mu_k <- compute_mu_from_beta(params[[k]]$beta_ch, wf, J, boundary, P)
+
+      mu_wave <- compute_mu_from_beta(params[[k]]$beta_ch, wf, J, boundary, P)
+      if (isTRUE(mean_intercept)) {
+        params[[k]]$bias <- sample_bias(k, idx, mu_wave)
+      }
+      mu_k <- add_bias_to_mu(mu_wave, params[[k]]$bias)
       params[[k]]$mu_cached      <- as_num_mat(mu_k)
       params[[k]]$mu_cached_iter <- iter
-      
+
       Yk <- lapply(idx, function(ii) Y[[ii]])
       params <- cc_switch_kernel_eig(k, params, kernels, t, Yk)
       params <- mh_update_kernel_eig(k, params, kernels, t, Yk, a_eta, b_eta)
@@ -264,7 +317,7 @@ wicmad <- function(
           }
           list(kern_idx=kc$kern_idx, kern_pars=kern_pars, tau_B=kc$tau_B,
                Lsel=Lsel, eta=kc$eta, sigma2=kc$sigma2, tau_sigma=kc$tau_sigma,
-               pi_g=pi_g, sparsity=spars, acc=kc$acc)
+               pi_g=pi_g, sparsity=spars, bias=kc$bias, acc=kc$acc)
         }
         diag$clusters$A[[sidx]] <- snap_k(k_big)
         diag$clusters$B[[sidx]] <- snap_k(k_sec)

@@ -6,7 +6,8 @@ update_cluster_wavelet_params_besov <- function(
     kappa_pi = 0.6, c2 = 1.0, tau_pi = 40,
     g_hyp = NULL,
     a_sig = 2.5, b_sig = 0.02,   # for sigma2_m
-    a_tau = 2.0, b_tau = 2.0     # for tau_sigma
+    a_tau = 2.0, b_tau = 2.0,    # for tau_sigma
+    bias_coeff = NULL
 ) {
   if (length(idx) == 0) {
     return(list(
@@ -18,7 +19,7 @@ update_cluster_wavelet_params_besov <- function(
     ))
   }
   if (length(sigma2_m) != M) stop("sigma2_m must be length M.")
-  stk <- stack_D_from_precomp(precomp, idx, M)
+  stk <- stack_D_from_precomp(precomp, idx, M, bias_coeff = bias_coeff)
   D   <- stk$D_arr; maps <- stk$maps
   ncoeff <- dim(D)[1]; N <- dim(D)[2]
   lev_names <- names(maps[[1]]$map$idx)
