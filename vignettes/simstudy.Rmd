@@ -1,0 +1,851 @@
+---
+title: "WICMAD: Simulation Study (Staerman-style anomalies + GP normals)"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{WICMAD: Simulation Study}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+
+```{r setup, include=FALSE}
+# set.seed(9307)
+# knitr::opts_chunk$set(
+#   collapse = TRUE, comment = "#>", fig.width = 7, fig.height = 4.5,
+# )
+suppressPackageStartupMessages({
+  library(dplyr); library(tidyr); library(purrr); library(ggplot2); library(MASS)
+  library(WICMAD)
+})
+```
+
+# Overview
+
+This simulation follows the anomaly types from **Staerman et al. (2023)** and plugs them into a DP–ICM–GP pipeline. We keep \(P=2^J\) grids and evaluate three *univariate* variants per dataset:
+
+1. **Raw**: cluster on the single raw signal channel.
+2. **SVD(4)**: **cluster on four SVD components** per curve (time series for each component given by score\(_{ik}\) × \(V_k(t)\)); we **plot these four components** before clustering.
+3. **Deriv(1,2)**: cluster on a 3-channel input \((x, x', x'')\); we **plot the three channels** before clustering.
+
+We *always* plot the dataset **actually used for clustering** first.
+
+**Anomaly families used (paper-aligned):**
+- **Model 1 — Isolated (impulse)**: a brief impulse at a single time index.
+- **Model 2 — Magnitude I (constant shift)**: a global vertical translation.
+- **Model 3 — Magnitude II (big interval)**: one contiguous sub-interval with a large level shift.
+- **Model 4 — Shape (sinusoid)**: a sinusoid with random frequency superimposed.
+
+> For the **isolated spikes** dataset, the baseline curves are **flatter** and the spike **bigger** so anomalies are visually obvious.
+
+```{r helpers-and-binarize}
+# --- Bin K clusters -> {Normal, Anomaly} with small-cluster rule ---
+determine_normal_anomaly_clusters <- function(
+  z_hat,
+  reveal_idx = integer(0),
+  min_size   = 5L,
+  min_prop   = NULL
+) {
+  z_hat <- as.integer(z_hat)
+  N <- length(z_hat); stopifnot(N >= 1L, all(z_hat >= 1L))
+  cl_ids <- sort(unique(z_hat))
+  cl_sizes <- vapply(cl_ids, function(k) sum(z_hat == k), integer(1))
+  names(cl_sizes) <- as.character(cl_ids)
+
+  thr_abs  <- as.integer(min_size)
+  thr_prop <- if (!is.null(min_prop)) ceiling(min_prop * N) else 0L
+  thr      <- max(thr_abs, thr_prop)
+
+  is_small <- cl_sizes <= thr
+  eligible <- cl_ids[!is_small]
+
+  reveal_idx <- unique(as.integer(reveal_idx))
+  reveal_idx <- reveal_idx[reveal_idx >= 1 & reveal_idx <= N]
+  has_revealed <- length(reveal_idx) > 0
+
+  choose_normal <- function(cands) {
+    if (length(cands) == 0L) return(integer(0))
+    if (has_revealed) {
+      rev_counts <- vapply(cands, function(k) sum(z_hat[reveal_idx] == k), integer(1))
+      names(rev_counts) <- as.character(cands)
+      tied <- cands[rev_counts == max(rev_counts)]
+      if (length(tied) > 1L) tied[which.max(cl_sizes[as.character(tied)])] else tied
+    } else {
+      cands[which.max(cl_sizes[as.character(cands)])]
+    }
+  }
+
+  normal_cluster_id <- choose_normal(eligible)
+  if (length(normal_cluster_id) == 0L) normal_cluster_id <- choose_normal(cl_ids)
+
+  anomaly_cluster_ids <- setdiff(cl_ids, normal_cluster_id)
+  pred_anom <- as.integer(z_hat %in% anomaly_cluster_ids)  # 1=anomaly, 0=normal
+
+  list(
+    normal_cluster_id   = as.integer(normal_cluster_id),
+    anomaly_cluster_ids = as.integer(anomaly_cluster_ids),
+    pred_anom           = pred_anom,
+    cluster_sizes       = cl_sizes
+  )
+}
+
+# --- Confusion matrix + metrics (returns plot too) ---------------
+confusion_after <- function(df_long, z_hat, reveal_idx = integer(0),
+                            min_size = 5L, min_prop = NULL,
+                            dataset_name = NULL, make_plot = TRUE) {
+  bin <- determine_normal_anomaly_clusters(
+    z_hat = z_hat, reveal_idx = reveal_idx,
+    min_size = min_size, min_prop = min_prop
+  )
+
+  truth_lab <- df_long |>
+    dplyr::distinct(id, label) |>
+    dplyr::arrange(id) |>
+    dplyr::pull(label)
+  true_anom <- as.integer(truth_lab == "Anomaly")
+  stopifnot(length(true_anom) == length(bin$pred_anom))
+
+  confmat <- table(
+    Truth = factor(ifelse(true_anom == 1, "Anomaly", "Normal"),
+                   levels = c("Normal","Anomaly")),
+    Pred  = factor(ifelse(bin$pred_anom == 1, "Anomaly", "Normal"),
+                   levels = c("Normal","Anomaly"))
+  )
+
+  TP <- confmat["Anomaly","Anomaly"]; TN <- confmat["Normal","Normal"]
+  FP <- confmat["Normal","Anomaly"];   FN <- confmat["Anomaly","Normal"]
+
+  acc  <- (TP + TN) / sum(confmat)
+  prec <- if ((TP + FP) > 0) TP / (TP + FP) else NA
+  rec  <- if ((TP + FN) > 0) TP / (TP + FN) else NA
+  f1   <- if (!is.na(prec) && !is.na(rec) && (prec + rec) > 0) 2*prec*rec/(prec+rec) else NA
+
+  ttl <- if (is.null(dataset_name)) "Confusion Matrix" else paste("Confusion Matrix —", dataset_name)
+
+  p <- NULL
+  if (isTRUE(make_plot)) {
+    cm_df <- as.data.frame(confmat)
+    p <- ggplot(cm_df, aes(x = Pred, y = Truth, fill = Freq)) +
+      geom_tile(color = "white") +
+      geom_text(aes(label = Freq), fontface = "bold") +
+      scale_fill_gradient(low = "#f7fbff", high = "#08306b") +
+      labs(title = ttl, x = "Predicted", y = "True") +
+      theme_minimal()
+  }
+
+  list(confmat = confmat,
+       metrics = list(acc = acc, prec = prec, rec = rec, f1 = f1),
+       bin = bin,
+       plot = p)
+}
+```
+
+# Generators and utilities
+
+```{r kernels-and-gp}
+# Grid & base means
+Tn <- 256
+t  <- seq(0, 1, length.out = Tn)
+
+f_base <- function(tt) 0.6*sin(2*pi*2*tt) + 0.25*cos(2*pi*5*tt) + 0.1*tt
+f_base_flat <- function(tt) 0.15*sin(2*pi*2*tt) + 0.08*cos(2*pi*5*tt) + 0.02*tt  # for isolated
+
+# Kernels
+dist_matrix <- function(x) outer(x, x, function(a,b) abs(a - b))
+k_se <- function(x, ell, sf2) { D <- dist_matrix(x); sf2 * exp(-(D^2) / (2*ell^2)) }
+k_periodic <- function(x, per, ellp, sf2) { D <- dist_matrix(x); sf2 * exp(-2 * (sin(pi * D / per)^2) / (ellp^2)) }
+k_quasiperiodic <- function(x, ell1 = 0.15, sf2_1 = 1.0, per = 0.30, ellp = 0.30, sf2_per = 1.0, ell2 = 0.60, sf2_2 = 0.4) {
+  k1 <- k_se(x, ell1, sf2_1) * k_periodic(x, per, ellp, sf2_per)
+  k2 <- k_se(x, ell2, sf2_2)
+  k1 + k2
+}
+
+# GP sampler
+gp_sample <- function(grid, mean_fun, K, noise_sd = 0.05, jitter = 1e-6) {
+  P <- length(grid); m <- mean_fun(grid)
+  Sigma <- K + diag(noise_sd^2, P) + diag(jitter, P)
+  L <- chol(Sigma); z <- rnorm(P)
+  as.numeric(m + t(L) %*% z)
+}
+
+# Normals
+make_normal_curves_gp <- function(n = 40, P = 256, kernel_fun = k_quasiperiodic, noise_sd = 0.05, mean_fun = f_base) {
+  grid <- seq(0, 1, length.out = P); K <- kernel_fun(grid)
+  purrr::map_dfr(seq_len(n), function(i) tibble::tibble(id = i, t = grid, x = gp_sample(grid, mean_fun, K, noise_sd)))
+}
+
+# Multivariate normals (3ch LMC)
+make_multivariate_normals_gp <- function(N = 40, M = 3, P = 256, Q = 2, kernel_fun = k_quasiperiodic, noise_sd = 0.05,
+                                         A = matrix(c(1.0,0.7, 0.6,1.0, 0.8,0.4), nrow = 3, byrow = TRUE)) {
+  stopifnot(M == nrow(A), Q == ncol(A))
+  grid <- seq(0, 1, length.out = P); K <- kernel_fun(grid)
+  U <- replicate(Q, gp_sample(grid, f_base, K, noise_sd = 0.0))
+  purrr::map_dfr(seq_len(N), function(i) {
+    eps <- matrix(rnorm(P*M, 0, noise_sd), nrow = P, ncol = M)
+    X <- U %*% t(A) + eps  # P x M
+    tibble::tibble(
+      id = i,
+      t  = rep(grid, times = M),
+      x  = as.vector(X),
+      channel = factor(rep(paste0("ch", 1:M), each = P), levels = paste0("ch", 1:M))
+    )
+  })
+}
+
+# Staerman-style anomalies
+gen_staerman_anomaly <- function(type, grid, scale_ref = 1.0, interval_frac = 0.10) {
+  P <- length(grid); dx <- (max(grid) - min(grid)) / (P - 1)
+  if (type == "isolated") {
+    amp <- runif(1, 3, 4) * 2.5 * scale_ref; sgn <- sample(c(-1,1), 1)
+    i0 <- sample(3:(P-2), 1); w <- dx * runif(1, 0.3, 0.8); A <- amp * sgn
+    A * exp(- (grid - grid[i0])^2 / (2*w^2))
+  } else if (type == "mag1") {
+    rep(runif(1, 12, 15) * scale_ref * sample(c(-1,1), 1), P)
+  } else if (type == "mag2") {
+    len <- max(2L, round(interval_frac * P)); start <- sample(1:(P - len + 1), 1)
+    lev <- runif(1, 10, 15) * scale_ref * sample(c(-1,1), 1)
+    v <- rep(0, P); idx <- start:(start + len - 1); s <- seq(0, 1, length.out = length(idx))
+    ramp <- 0.5 * (1 - cos(pi * s)); v[idx] <- lev * ramp; v
+  } else if (type == "shape") {
+    u4 <- runif(1, 0.2, 2.0); 3.0 * scale_ref * sin(2*pi*u4*grid)
+  } else stop("type must be one of: isolated, mag1, mag2, shape")
+}
+
+# Numerical derivatives (first + second, with sensible endpoints)
+num_deriv1 <- function(x, t) {
+  P <- length(x); v <- numeric(P)
+  v[1] <- (x[2] - x[1]) / (t[2] - t[1]); v[P] <- (x[P] - x[P-1]) / (t[P] - t[P-1])
+  if (P > 2) v[2:(P-1)] <- (x[3:P] - x[1:(P-2)]) / (t[3:P] - t[1:(P-2)])
+  v
+}
+num_deriv2 <- function(x, t) {
+  P <- length(x); v <- numeric(P); dt <- mean(diff(t))
+  if (P >= 3) v[2:(P-1)] <- (x[3:P] - 2*x[2:(P-1)] + x[1:(P-2)]) / (dt^2)
+  v[1] <- v[2]; v[P] <- v[P-1]; v
+}
+```
+
+## Data prep to model matrices
+
+```{r data-prep}
+# Always-plot helper (univariate or multivariate)
+plot_functions_before <- function(df, title = "") {
+  if (!"channel" %in% names(df)) df <- mutate(df, channel = factor("ch1", levels = "ch1"))
+  ggplot(df, aes(t, x, group = interaction(id, channel), color = label)) +
+    geom_line(alpha = 0.55, linewidth = 0.55) +
+    scale_color_manual(values = c("Normal"="#1f77b4","Anomaly"="#d62728")) +
+    facet_wrap(~ channel, ncol = 1, scales = "free_y") +
+    labs(title = title, x = "t", y = "x(t)", color = "") +
+    theme_minimal(base_size = 12)
+}
+
+# Build Y-list for raw univariate (one channel)
+uni_to_model_raw <- function(df) {
+  ids  <- sort(unique(df$id)); tvec <- df |> arrange(t) |> pull(t) |> unique()
+  Y <- lapply(ids, function(i) df |> filter(id == i) |> arrange(t) |> pull(x) |> matrix(ncol = 1L))
+  by_id <- df |> distinct(id, label) |> arrange(id)
+  list(Y = Y, t = tvec, ids = ids, is_anom = ifelse(by_id$label == "Anomaly", 1L, 0L))
+}
+
+# Build Y-list for (x, x', x'') univariate (three channels)
+uni_to_model_deriv12 <- function(df, scale_each = FALSE) {
+  ids  <- sort(unique(df$id)); tvec <- df |> arrange(t) |> pull(t) |> unique()
+  Y <- lapply(ids, function(i) {
+    xi <- df |> filter(id == i) |> arrange(t) |> pull(x)
+    d1 <- num_deriv1(xi, tvec); d2 <- num_deriv2(xi, tvec)
+    if (scale_each) {
+      s1 <- sd(d1); if (is.finite(s1) && s1 > 0) d1 <- d1 / s1
+      s2 <- sd(d2); if (is.finite(s2) && s2 > 0) d2 <- d2 / s2
+    }
+    cbind(xi, d1, d2)
+  })
+  by_id <- df |> distinct(id, label) |> arrange(id)
+  list(Y = Y, t = tvec, ids = ids, is_anom = ifelse(by_id$label == "Anomaly", 1L, 0L))
+}
+
+# Build 4-component SVD dataset: per-curve time series for each component (score * V_k)
+svd_components_dataset <- function(df, r = 4) {
+  ids <- df |> distinct(id) |> arrange(id) |> pull(id)
+  tvec <- df |> arrange(t) |> pull(t) |> unique()
+  N <- length(ids); P <- length(tvec)
+  X <- matrix(NA_real_, nrow = N, ncol = P)
+  lab_by_id <- df |> distinct(id, label) |> arrange(id) |> pull(label)
+  for (ii in seq_along(ids)) {
+    xi <- df |> filter(id == ids[ii]) |> arrange(t) |> pull(x)
+    stopifnot(length(xi) == P); X[ii, ] <- xi
+  }
+  Xc <- scale(X, center = TRUE, scale = FALSE)
+  sv <- svd(Xc); r  <- min(r, length(sv$d))
+  U <- sv$u[, 1:r, drop = FALSE]; D <- diag(sv$d[1:r], r, r); V <- sv$v[, 1:r, drop = FALSE]  # V: P x r
+  scores <- U %*% D  # N x r
+
+  # Long df with 4 channels: comp1..compr, values = score[i,k] * V[,k]
+  comps_list <- vector("list", N)
+  for (i in seq_len(N)) {
+    comp_mat <- matrix(NA_real_, nrow = P, ncol = r)
+    for (k in seq_len(r)) comp_mat[, k] <- scores[i, k] * V[, k]
+    comps_list[[i]] <- tibble::tibble(
+      id = ids[i],
+      t = rep(tvec, times = r),
+      x = as.vector(comp_mat),
+      channel = factor(rep(paste0("comp", seq_len(r)), each = P), levels = paste0("comp", seq_len(r))),
+      label = factor(rep(lab_by_id[i], each = P * r), levels = c("Normal","Anomaly"))
+    )
+  }
+  df_comps <- bind_rows(comps_list)
+
+  # Y-list with r columns (channels)
+  Y <- lapply(seq_len(N), function(i) {
+    wide <- df_comps |> filter(id == ids[i]) |> arrange(t) |>
+      dplyr::select(t, channel, x) |>
+      tidyr::pivot_wider(names_from = channel, values_from = x) |>
+      dplyr::select(dplyr::all_of(paste0("comp", seq_len(r)))) |>
+      as.matrix()
+  })
+
+  list(df = df_comps, Y = Y, t = tvec, ids = ids, labels = lab_by_id)
+}
+
+# Quick clustered overlay
+plot_clustered_inline <- function(Y, t, z_hat, title = "Clustered curves (Dahl)") {
+  stopifnot(length(Y) == length(z_hat))
+  df_list <- lapply(seq_along(Y), function(i) {
+    mat <- as.matrix(Y[[i]]); P_i <- nrow(mat); M_i <- ncol(mat)
+    tibble::tibble(
+      id      = i,
+      t       = rep(t, times = M_i),
+      value   = as.vector(mat),
+      channel = factor(rep(paste0("ch", seq_len(M_i)), each = P_i)),
+      cluster = factor(z_hat[i])
+    )
+  })
+  dfl <- dplyr::bind_rows(df_list)
+  cols <- scales::hue_pal()(length(unique(dfl$cluster)))
+  ggplot(dfl, aes(t, value, group = interaction(id, channel), color = cluster)) +
+    geom_line(alpha = 0.7, linewidth = 0.5) +
+    scale_color_manual(values = cols) +
+    facet_wrap(~ channel, ncol = 1, scales = "free_y") +
+    labs(x = "t", y = "x(t)", title = title, color = "cluster") +
+    theme_minimal(base_size = 12)
+}
+```
+
+# Univariate datasets (three runs each: Raw, SVD(4) as 4 comps, Deriv(1,2))
+
+For each dataset we **first plot the dataset we will cluster**, then run **Raw**, **SVD(4)** (four component channels), and **Deriv(1,2)** variants.
+
+We use a small *revealed* set (15% of known normals) during warm-up to mirror semi-supervised conditions.
+
+## Model 1 — Isolated (flatter baseline + bigger spike)
+
+```{r uni-1-generate}
+set.seed(82123)
+P_use <- 64; N_curves <- 50
+grid <- seq(0, 1, length.out = P_use)
+K <- k_quasiperiodic(grid)
+
+# Flatter normals (as requested) + modest noise
+df_iso <- bind_rows(lapply(seq_len(N_curves), function(i) {
+  xi <- gp_sample(grid, f_base_flat, K, noise_sd = 0.02)
+  tibble::tibble(id = i, t = grid, x = xi)
+}))
+# Inject ~5% anomalies: one ultra-narrow spike
+n_anom <- max(1L, floor(0.05 * N_curves)); ids_anom <- sort(sample(seq_len(N_curves), n_anom, replace = FALSE))
+for (i in ids_anom) {
+  i0 <- sample(3:(P_use-2), 1); w <- (1/(P_use-1)) * runif(1, 0.3, 0.8); A <- runif(1, 8, 12) * sample(c(-1,1), 1)
+  bump <- A * exp(-(grid - grid[i0])^2/(2*w^2)); df_iso$x[df_iso$id == i] <- df_iso$x[df_iso$id == i] + bump
+}
+df_iso <- df_iso |>
+  mutate(label = if_else(id %in% ids_anom, "Anomaly", "Normal"),
+         label = factor(label, levels = c("Normal","Anomaly")))
+```
+
+### Run A: Raw signal (plot raw)
+
+```{r uni-1-raw}
+plot_functions_before(df_iso, "Model 1 — Isolated: Raw curves (dataset to be clustered)")
+
+ds_raw <- uni_to_model_raw(df_iso)
+set.seed(9307)
+normal_ids <- df_iso |> filter(label == "Normal") |> distinct(id) |> pull(id)
+revealed_idx <- if (length(normal_ids) > 0) sample(normal_ids, max(1, round(0.15*length(normal_ids))), replace = FALSE) else integer(0)
+
+res_iso_raw <- wicmad(Y = ds_raw$Y, t = ds_raw$t,
+                         n_iter = 3000, burn = 1000, thin = 1,
+                         use_parallel = TRUE, K_init = 10,
+                         revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+
+dahl_iso_raw <- dahl_from_res(res_iso_raw)
+plot_clustered_inline(ds_raw$Y, ds_raw$t, dahl_iso_raw$z_hat, "Isolated — Raw: Clustered (Dahl)")
+
+cm_iso_raw <- confusion_after(df_iso, dahl_iso_raw$z_hat, reveal_idx = revealed_idx,
+                              min_size = 3L, min_prop = 0.05, dataset_name = "Isolated — Raw")
+if (!is.null(cm_iso_raw$plot)) cm_iso_raw$plot
+```
+
+### Run B: SVD(4) as four component channels (plot the 4 components)
+
+```{r uni-1-svd}
+svd_iso <- svd_components_dataset(df_iso, r = 4)
+# Plot exactly the 4 components used for clustering (comp1..comp4)
+plot_functions_before(svd_iso$df, "Model 1 — Isolated: SVD(4) components (dataset to be clustered)")
+
+# Cluster on 4 channels (comp1..comp4)
+set.seed(9307)
+revealed_idx <- if (length(normal_ids) > 0) sample(normal_ids, max(1, round(0.15*length(normal_ids))), replace = FALSE) else integer(0)
+
+res_iso_svd <- wicmad(Y = svd_iso$Y, t = svd_iso$t,
+                         n_iter = 3000, burn = 1000, thin = 1,
+                         use_parallel = TRUE, K_init = 10,
+                         revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+
+dahl_iso_svd <- dahl_from_res(res_iso_svd)
+plot_clustered_inline(svd_iso$Y, svd_iso$t, dahl_iso_svd$z_hat, "Isolated — SVD(4) comps: Clustered (Dahl)")
+
+cm_iso_svd <- confusion_after(df_iso, dahl_iso_svd$z_hat, reveal_idx = revealed_idx,
+                              min_size = 3L, min_prop = 0.05, dataset_name = "Isolated — SVD(4) comps")
+if (!is.null(cm_iso_svd$plot)) cm_iso_svd$plot
+```
+
+### Run C: Deriv(1,2) → (x, x′, x″) (plot the three channels)
+
+```{r uni-1-deriv12}
+df_iso_deriv <- df_iso %>%
+  group_by(id) %>% arrange(t, .by_group = TRUE) %>% mutate(dx = num_deriv1(x, t), ddx = num_deriv2(x, t)) %>% ungroup() %>%
+  tidyr::pivot_longer(cols = c(x, dx, ddx), names_to = "channel", values_to = "val") %>%
+  mutate(channel = factor(channel, levels = c("x","dx","ddx")),
+         x = val) %>% dplyr::select(-val)
+plot_functions_before(df_iso_deriv, "Model 1 — Isolated: (x, x′, x″) (dataset to be clustered)")
+
+ds_deriv <- uni_to_model_deriv12(df_iso, scale_each = FALSE)
+set.seed(9307)
+revealed_idx <- if (length(normal_ids) > 0) sample(normal_ids, max(1, round(0.15*length(normal_ids))), replace = FALSE) else integer(0)
+
+res_iso_deriv <- wicmad(Y = ds_deriv$Y, t = ds_deriv$t,
+                           n_iter = 3000, burn = 1000, thin = 1,
+                           use_parallel = TRUE, K_init = 10,
+                           revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+
+dahl_iso_deriv <- dahl_from_res(res_iso_deriv)
+plot_clustered_inline(ds_deriv$Y, ds_deriv$t, dahl_iso_deriv$z_hat, "Isolated — Deriv(1,2): Clustered (Dahl)")
+
+cm_iso_deriv <- confusion_after(df_iso, dahl_iso_deriv$z_hat, reveal_idx = revealed_idx,
+                                min_size = 3L, min_prop = 0.05, dataset_name = "Isolated — Deriv(1,2)")
+if (!is.null(cm_iso_deriv$plot)) cm_iso_deriv$plot
+```
+
+## Model 2 — Magnitude I (constant shift)
+
+```{r uni-2-generate}
+set.seed(8746)
+P_use <- 64; N_curves <- 40
+grid <- seq(0, 1, length.out = P_use)
+df_mag1 <- make_normal_curves_gp(n = N_curves, P = P_use)
+n_anom <- max(1L, floor(0.05 * N_curves)); ids_anom <- sort(sample(seq_len(N_curves), n_anom, replace = FALSE))
+for (i in ids_anom) df_mag1$x[df_mag1$id == i] <- df_mag1$x[df_mag1$id == i] + gen_staerman_anomaly("mag1", grid, 1.0)
+df_mag1 <- df_mag1 |> mutate(label = if_else(id %in% ids_anom, "Anomaly", "Normal"),
+                             label = factor(label, levels = c("Normal","Anomaly")))
+```
+
+### Run A: Raw
+
+```{r uni-2-raw}
+plot_functions_before(df_mag1, "Model 2 — Mag I: Raw curves (dataset to be clustered)")
+ds_raw <- uni_to_model_raw(df_mag1)
+set.seed(9307)
+normal_ids <- df_mag1 |> filter(label == "Normal") |> distinct(id) |> pull(id)
+revealed_idx <- if (length(normal_ids) > 0) sample(normal_ids, max(1, round(0.15*length(normal_ids))), replace = FALSE) else integer(0)
+
+res_mag1_raw <- wicmad(Y = ds_raw$Y, t = ds_raw$t,
+                          n_iter = 3000, burn = 1000, thin = 1,
+                          use_parallel = TRUE, K_init = 8,
+                          revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+dahl_mag1_raw <- dahl_from_res(res_mag1_raw)
+plot_clustered_inline(ds_raw$Y, ds_raw$t, dahl_mag1_raw$z_hat, "Mag I — Raw: Clustered (Dahl)")
+cm_mag1_raw <- confusion_after(df_mag1, dahl_mag1_raw$z_hat, reveal_idx = revealed_idx, min_size = 3L, dataset_name = "Mag I — Raw")
+if (!is.null(cm_mag1_raw$plot)) cm_mag1_raw$plot
+```
+
+### Run B: SVD(4) components
+
+```{r uni-2-svd}
+svd_mag1 <- svd_components_dataset(df_mag1, r = 4)
+plot_functions_before(svd_mag1$df, "Model 2 — Mag I: SVD(4) components (dataset to be clustered)")
+ds_svd <- list(Y = svd_mag1$Y, t = svd_mag1$t)  # reuse
+
+res_mag1_svd <- wicmad(Y = ds_svd$Y, t = ds_svd$t,
+                          n_iter = 3000, burn = 1000, thin = 1,
+                          use_parallel = TRUE, K_init = 8,
+                          revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+dahl_mag1_svd <- dahl_from_res(res_mag1_svd)
+plot_clustered_inline(ds_svd$Y, ds_svd$t, dahl_mag1_svd$z_hat, "Mag I — SVD(4) comps: Clustered (Dahl)")
+cm_mag1_svd <- confusion_after(df_mag1, dahl_mag1_svd$z_hat, reveal_idx = revealed_idx, min_size = 3L, dataset_name = "Mag I — SVD(4) comps")
+if (!is.null(cm_mag1_svd$plot)) cm_mag1_svd$plot
+```
+
+### Run C: Deriv(1,2)
+
+```{r uni-2-deriv}
+df_mag1_deriv <- df_mag1 %>% group_by(id) %>% arrange(t, .by_group = TRUE) %>% mutate(dx = num_deriv1(x, t), ddx = num_deriv2(x, t)) %>%
+  ungroup() %>% tidyr::pivot_longer(cols = c(x, dx, ddx), names_to = "channel", values_to = "val") %>%
+  mutate(channel = factor(channel, levels = c("x","dx","ddx")), x = val) %>% dplyr::select(-val)
+plot_functions_before(df_mag1_deriv, "Model 2 — Mag I: (x, x′, x″) (dataset to be clustered)")
+
+ds_deriv <- uni_to_model_deriv12(df_mag1, scale_each = FALSE)
+res_mag1_deriv <- wicmad(Y = ds_deriv$Y, t = ds_deriv$t,
+                            n_iter = 3000, burn = 1000, thin = 1,
+                            use_parallel = TRUE, K_init = 8,
+                            revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+dahl_mag1_deriv <- dahl_from_res(res_mag1_deriv)
+plot_clustered_inline(ds_deriv$Y, ds_deriv$t, dahl_mag1_deriv$z_hat, "Mag I — Deriv(1,2): Clustered (Dahl)")
+cm_mag1_deriv <- confusion_after(df_mag1, dahl_mag1_deriv$z_hat, reveal_idx = revealed_idx, min_size = 3L, dataset_name = "Mag I — Deriv(1,2)")
+if (!is.null(cm_mag1_deriv$plot)) cm_mag1_deriv$plot
+```
+
+## Model 3 — Magnitude II (one large interval)
+
+```{r uni-3-generate}
+set.seed(473423)
+P_use <- 64; N_curves <- 60; grid <- seq(0, 1, length.out = P_use)
+df_mag2 <- make_normal_curves_gp(n = N_curves, P = P_use)
+n_anom <- max(1L, floor(0.05 * N_curves)); ids_anom <- sort(sample(seq_len(N_curves), n_anom, replace = FALSE))
+for (i in ids_anom) df_mag2$x[df_mag2$id == i] <- df_mag2$x[df_mag2$id == i] + gen_staerman_anomaly("mag2", grid, 1.0, interval_frac = 0.10)
+df_mag2 <- df_mag2 |> mutate(label = if_else(id %in% ids_anom, "Anomaly", "Normal"),
+                             label = factor(label, levels = c("Normal","Anomaly")))
+```
+
+### Run A: Raw
+
+```{r uni-3-raw}
+plot_functions_before(df_mag2, "Model 3 — Mag II: Raw curves (dataset to be clustered)")
+ds_raw <- uni_to_model_raw(df_mag2)
+set.seed(9307)
+normal_ids <- df_mag2 |> filter(label == "Normal") |> distinct(id) |> pull(id)
+revealed_idx <- if (length(normal_ids) > 0) sample(normal_ids, max(1, round(0.15*length(normal_ids))), replace = FALSE) else integer(0)
+
+res_mag2_raw <- wicmad(Y = ds_raw$Y, t = ds_raw$t,
+                          n_iter = 3000, burn = 1000, thin = 1,
+                          use_parallel = TRUE, K_init = 8,
+                          revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+dahl_mag2_raw <- dahl_from_res(res_mag2_raw)
+plot_clustered_inline(ds_raw$Y, ds_raw$t, dahl_mag2_raw$z_hat, "Mag II — Raw: Clustered (Dahl)")
+cm_mag2_raw <- confusion_after(df_mag2, dahl_mag2_raw$z_hat, reveal_idx = revealed_idx, min_size = 3L, min_prop = 0.05, dataset_name = "Mag II — Raw")
+if (!is.null(cm_mag2_raw$plot)) cm_mag2_raw$plot
+```
+
+### Run B: SVD(4) components
+
+```{r uni-3-svd}
+svd_mag2 <- svd_components_dataset(df_mag2, r = 4)
+plot_functions_before(svd_mag2$df, "Model 3 — Mag II: SVD(4) components (dataset to be clustered)")
+ds_svd <- list(Y = svd_mag2$Y, t = svd_mag2$t)
+
+res_mag2_svd <- wicmad(Y = ds_svd$Y, t = ds_svd$t,
+                          n_iter = 3000, burn = 1000, thin = 1,
+                          use_parallel = TRUE, K_init = 8,
+                          revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+dahl_mag2_svd <- dahl_from_res(res_mag2_svd)
+plot_clustered_inline(ds_svd$Y, ds_svd$t, dahl_mag2_svd$z_hat, "Mag II — SVD(4) comps: Clustered (Dahl)")
+cm_mag2_svd <- confusion_after(df_mag2, dahl_mag2_svd$z_hat, reveal_idx = revealed_idx, min_size = 3L, min_prop = 0.05, dataset_name = "Mag II — SVD(4) comps")
+if (!is.null(cm_mag2_svd$plot)) cm_mag2_svd$plot
+```
+
+### Run C: Deriv(1,2)
+
+```{r uni-3-deriv}
+df_mag2_deriv <- df_mag2 %>% group_by(id) %>% arrange(t, .by_group = TRUE) %>% mutate(dx = num_deriv1(x, t), ddx = num_deriv2(x, t)) %>%
+  ungroup() %>% tidyr::pivot_longer(cols = c(x, dx, ddx), names_to = "channel", values_to = "val") %>%
+  mutate(channel = factor(channel, levels = c("x","dx","ddx")), x = val) %>% dplyr::select(-val)
+plot_functions_before(df_mag2_deriv, "Model 3 — Mag II: (x, x′, x″) (dataset to be clustered)")
+
+ds_deriv <- uni_to_model_deriv12(df_mag2, scale_each = FALSE)
+res_mag2_deriv <- wicmad(Y = ds_deriv$Y, t = ds_deriv$t,
+                            n_iter = 3000, burn = 1000, thin = 1,
+                            use_parallel = TRUE, K_init = 8,
+                            revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+dahl_mag2_deriv <- dahl_from_res(res_mag2_deriv)
+plot_clustered_inline(ds_deriv$Y, ds_deriv$t, dahl_mag2_deriv$z_hat, "Mag II — Deriv(1,2): Clustered (Dahl)")
+cm_mag2_deriv <- confusion_after(df_mag2, dahl_mag2_deriv$z_hat, reveal_idx = revealed_idx, min_size = 3L, min_prop = 0.05, dataset_name = "Mag II — Deriv(1,2)")
+if (!is.null(cm_mag2_deriv$plot)) cm_mag2_deriv$plot
+```
+
+## Model 4 — Shape (sinusoid with random frequency)
+
+```{r uni-4-generate}
+P_use <- 64; N_curves <- 60; grid <- seq(0, 1, length.out = P_use)
+df_shape <- make_normal_curves_gp(n = N_curves, P = P_use)
+n_anom <- max(1L, floor(0.05 * N_curves)); ids_anom <- sort(sample(seq_len(N_curves), n_anom, replace = FALSE))
+for (i in ids_anom) df_shape$x[df_shape$id == i] <- df_shape$x[df_shape$id == i] + gen_staerman_anomaly("shape", grid, 1.0)
+df_shape <- df_shape |> mutate(label = if_else(id %in% ids_anom, "Anomaly", "Normal"),
+                               label = factor(label, levels = c("Normal","Anomaly")))
+```
+
+### Run A: Raw
+
+```{r uni-4-raw}
+plot_functions_before(df_shape, "Model 4 — Shape: Raw curves (dataset to be clustered)")
+ds_raw <- uni_to_model_raw(df_shape)
+set.seed(9307)
+normal_ids <- df_shape |> filter(label == "Normal") |> distinct(id) |> pull(id)
+revealed_idx <- if (length(normal_ids) > 0) sample(normal_ids, max(1, round(0.15*length(normal_ids))), replace = FALSE) else integer(0)
+
+res_shape_raw <- wicmad(Y = ds_raw$Y, t = ds_raw$t,
+                           n_iter = 3000, burn = 1000, thin = 1,
+                           use_parallel = TRUE, K_init = 8,
+                           revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+dahl_shape_raw <- dahl_from_res(res_shape_raw)
+plot_clustered_inline(ds_raw$Y, ds_raw$t, dahl_shape_raw$z_hat, "Shape — Raw: Clustered (Dahl)")
+cm_shape_raw <- confusion_after(df_shape, dahl_shape_raw$z_hat, reveal_idx = revealed_idx, min_size = 3L, min_prop = 0.05, dataset_name = "Shape — Raw")
+if (!is.null(cm_shape_raw$plot)) cm_shape_raw$plot
+```
+
+### Run B: SVD(4) components
+
+```{r uni-4-svd}
+svd_shape <- svd_components_dataset(df_shape, r = 4)
+plot_functions_before(svd_shape$df, "Model 4 — Shape: SVD(4) components (dataset to be clustered)")
+ds_svd <- list(Y = svd_shape$Y, t = svd_shape$t)
+
+res_shape_svd <- wicmad(Y = ds_svd$Y, t = ds_svd$t,
+                           n_iter = 3000, burn = 1000, thin = 1,
+                           use_parallel = TRUE, K_init = 8,
+                           revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+dahl_shape_svd <- dahl_from_res(res_shape_svd)
+plot_clustered_inline(ds_svd$Y, ds_svd$t, dahl_shape_svd$z_hat, "Shape — SVD(4) comps: Clustered (Dahl)")
+cm_shape_svd <- confusion_after(df_shape, dahl_shape_svd$z_hat, reveal_idx = revealed_idx, min_size = 3L, min_prop = 0.05, dataset_name = "Shape — SVD(4) comps")
+if (!is.null(cm_shape_svd$plot)) cm_shape_svd$plot
+```
+
+### Run C: Deriv(1,2)
+
+```{r uni-4-deriv}
+df_shape_deriv <- df_shape %>% group_by(id) %>% arrange(t, .by_group = TRUE) %>% mutate(dx = num_deriv1(x, t), ddx = num_deriv2(x, t)) %>%
+  ungroup() %>% tidyr::pivot_longer(cols = c(x, dx, ddx), names_to = "channel", values_to = "val") %>%
+  mutate(channel = factor(channel, levels = c("x","dx","ddx")), x = val) %>% dplyr::select(-val)
+plot_functions_before(df_shape_deriv, "Model 4 — Shape: (x, x′, x″) (dataset to be clustered)")
+
+ds_deriv <- uni_to_model_deriv12(df_shape, scale_each = FALSE)
+res_shape_deriv <- wicmad(Y = ds_deriv$Y, t = ds_deriv$t,
+                             n_iter = 3000, burn = 1000, thin = 1,
+                             use_parallel = TRUE, K_init = 8,
+                             revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+dahl_shape_deriv <- dahl_from_res(res_shape_deriv)
+plot_clustered_inline(ds_deriv$Y, ds_deriv$t, dahl_shape_deriv$z_hat, "Shape — Deriv(1,2): Clustered (Dahl)")
+cm_shape_deriv <- confusion_after(df_shape, dahl_shape_deriv$z_hat, reveal_idx = revealed_idx, min_size = 3L, min_prop = 0.05, dataset_name = "Shape — Deriv(1,2)")
+if (!is.null(cm_shape_deriv$plot)) cm_shape_deriv$plot
+```
+
+---
+
+# Multivariate datasets (3 channels)
+
+We keep the multivariate section from before and still **plot before clustering**.
+
+## Scenario A — one channel perturbed
+
+```{r mv-one}
+# --- Generate base MV data ---
+P_use  <- 64
+base_mv <- make_multivariate_normals_gp(N = 40, M = 3, P = P_use)
+
+# --- Choose anomaly IDs (FIXED: pass size to sample(), not sort(..., n_anom)) ---
+ids_pool <- sort(unique(base_mv$id))
+n_anom   <- max(1L, floor(0.05 * length(ids_pool)))
+n_anom   <- min(n_anom, length(ids_pool))   # guard
+
+set.seed(9307)
+ids_anom <- sort(sample(ids_pool, size = n_anom, replace = FALSE))
+
+# --- Assign one perturbed channel + anomaly type per anomalous id ---
+plan <- tidyr::expand_grid(id = ids_pool,
+                           channel = levels(base_mv$channel)) |>
+  dplyr::mutate(type = NA_character_)
+
+for (i in ids_anom) {
+  ch  <- sample(levels(base_mv$channel), 1)
+  aty <- sample(c("isolated","mag1","mag2","shape"), 1)
+  plan$type[plan$id == i & plan$channel == ch] <- aty
+}
+
+# --- Inject anomalies and label curves ---
+grid <- base_mv |>
+  dplyr::arrange(t) |>
+  dplyr::pull(t) |>
+  unique()
+
+df_mv_one <- base_mv |>
+  dplyr::left_join(plan, by = c("id","channel")) |>
+  dplyr::group_by(id, channel) |>
+  dplyr::group_modify(~{
+    if (!is.na(.x$type[1])) .x$x <- .x$x + gen_staerman_anomaly(.x$type[1], grid, 1.0)
+    .x
+  }) |>
+  dplyr::ungroup() |>
+  dplyr::mutate(label = dplyr::if_else(id %in% ids_anom, "Anomaly", "Normal"),
+                label = factor(label, levels = c("Normal","Anomaly")))
+
+# --- Plot before clustering ---
+plot_functions_before(df_mv_one, "MV — One channel perturbed: curves before clustering")
+
+# --- Prep inputs for wicmad() ---
+ids <- sort(unique(df_mv_one$id))
+chs <- sort(unique(df_mv_one$channel))
+tvec <- df_mv_one |> dplyr::arrange(t) |> dplyr::pull(t) |> unique()
+
+Y <- lapply(ids, function(i) {
+  df_mv_one |>
+    dplyr::filter(id == i) |>
+    dplyr::arrange(t) |>
+    dplyr::select(t, channel, x) |>
+    tidyr::pivot_wider(names_from = channel, values_from = x) |>
+    dplyr::select(dplyr::all_of(chs)) |>
+    as.matrix()
+})
+
+set.seed(9307)
+normal_ids <- df_mv_one |>
+  dplyr::distinct(id, label) |>
+  dplyr::filter(label == "Normal") |>
+  dplyr::pull(id)
+
+revealed_idx <- if (length(normal_ids) > 0) {
+  sample(normal_ids, size = max(1L, round(0.15 * length(normal_ids))), replace = FALSE)
+} else {
+  integer(0)
+}
+
+
+# --- Run model ---
+res_mv_one <- wicmad(
+  Y = Y, t = tvec,
+  n_iter = 2200, burn = 700, thin = 1, alpha_prior = c(10, 1),
+  wf = "la8", J = as.integer(round(log2(length(tvec)))), boundary = "periodic",
+  mh_step_L = 0.03, mh_step_eta = 0.10, mh_step_tauB = 0.15,
+  revealed_idx = revealed_idx, K_init = 5, unpin = FALSE
+)
+
+# --- Plot after clustering ---
+dahl_mv_one <- dahl_from_res(res_mv_one)
+plot_clustered_inline(Y, tvec, dahl_mv_one$z_hat, "MV — One channel: Clustered (Dahl)")
+
+cm_mv_one <- confusion_after(
+  df_mv_one, dahl_mv_one$z_hat,
+  reveal_idx = revealed_idx, min_size = 2L, min_prop = 0.05,
+  dataset_name = "MV: One Channel"
+)
+if (!is.null(cm_mv_one$plot)) cm_mv_one$plot
+
+```
+
+## Scenario B — two channels (same type)
+
+```{r mv-two-same}
+P_use <- 64
+base_mv <- make_multivariate_normals_gp(N = 40, M = 3, P = P_use)
+n_anom <- max(1L, floor(0.05 * length(unique(base_mv$id))))
+ids_anom <- sort(sample(unique(base_mv$id), n_anom, replace = FALSE))
+
+plan <- tidyr::expand_grid(id = unique(base_mv$id), channel = levels(base_mv$channel)) |>
+  mutate(type = NA_character_)
+for (i in ids_anom) {
+  chs <- sample(levels(base_mv$channel), 2, replace = FALSE)
+  aty <- sample(c("isolated","mag1","mag2","shape"), 1)
+  plan$type[plan$id == i & plan$channel %in% chs] <- aty
+}
+
+grid <- base_mv |> arrange(t) |> pull(t) |> unique()
+df_mv_two <- base_mv |>
+  left_join(plan, by = c("id","channel")) |>
+  group_by(id, channel) |>
+  group_modify(~{
+    if (!is.na(.x$type[1])) .x$x <- .x$x + gen_staerman_anomaly(.x$type[1], grid, 1.0)
+    .x
+  }) |>
+  ungroup() |>
+  mutate(label = if_else(id %in% ids_anom, "Anomaly", "Normal"),
+         label = factor(label, levels = c("Normal","Anomaly")))
+
+plot_functions_before(df_mv_two, "MV — Two channels (same type): curves before clustering")
+
+# Prep + run
+ids <- sort(unique(df_mv_two$id)); chs <- sort(unique(df_mv_two$channel))
+tvec <- df_mv_two |> arrange(t) |> pull(t) |> unique()
+Y <- lapply(ids, function(i) {
+  wide <- df_mv_two |> filter(id == i) |> arrange(t) |>
+    dplyr::select(t, channel, x) |> tidyr::pivot_wider(names_from = channel, values_from = x) |>
+    dplyr::select(dplyr::all_of(chs)) |> as.matrix()
+})
+set.seed(9307)
+normal_ids <- df_mv_two |> distinct(id, label) |> filter(label == "Normal") |> pull(id)
+revealed_idx <- if (length(normal_ids) > 0) sample(normal_ids, max(1, round(0.15*length(normal_ids))), replace = FALSE) else integer(0)
+
+res_mv_two <- wicmad(Y = Y, t = tvec,
+  n_iter = 2200, burn = 700, thin = 1, alpha_prior = c(10, 1),
+  wf = "la8", J = as.integer(round(log2(length(tvec)))), boundary = "periodic",
+  mh_step_L = 0.03, mh_step_eta = 0.10, mh_step_tauB = 0.15,
+  revealed_idx = revealed_idx, K_init = 5,unpin = FALSE
+)
+dahl_mv_two <- dahl_from_res(res_mv_two)
+plot_clustered_inline(Y, tvec, dahl_mv_two$z_hat, "MV — Two channels: Clustered (Dahl)")
+cm_mv_two <- confusion_after(df_mv_two, dahl_mv_two$z_hat, reveal_idx = revealed_idx, min_size = 2L, min_prop = 0.05, dataset_name = "MV: Two Channels (Same)")
+if (!is.null(cm_mv_two$plot)) cm_mv_two$plot
+```
+
+## Scenario C — three channels (mixed types)
+
+```{r mv-three-mixed}
+P_use <- 64
+base_mv <- make_multivariate_normals_gp(N = 40, M = 3, P = P_use)
+n_anom <- max(1L, floor(0.05 * length(unique(base_mv$id))))
+ids_anom <- sort(sample(unique(base_mv$id), n_anom, replace = FALSE))
+
+plan <- tidyr::expand_grid(id = unique(base_mv$id), channel = levels(base_mv$channel)) |>
+  mutate(type = NA_character_)
+for (i in ids_anom) {
+  atys <- sample(c("isolated","mag1","mag2","shape"), 3, replace = FALSE)
+  plan$type[plan$id == i & plan$channel == "ch1"] <- atys[1]
+  plan$type[plan$id == i & plan$channel == "ch2"] <- atys[2]
+  plan$type[plan$id == i & plan$channel == "ch3"] <- atys[3]
+}
+
+grid <- base_mv |> arrange(t) |> pull(t) |> unique()
+df_mv_three <- base_mv |>
+  left_join(plan, by = c("id","channel")) |>
+  group_by(id, channel) |>
+  group_modify(~{
+    if (!is.na(.x$type[1])) .x$x <- .x$x + gen_staerman_anomaly(.x$type[1], grid, 1.0)
+    .x
+  }) |>
+  ungroup() |>
+  mutate(label = if_else(id %in% ids_anom, "Anomaly", "Normal"),
+         label = factor(label, levels = c("Normal","Anomaly")))
+
+plot_functions_before(df_mv_three, "MV — Three channels (mixed): curves before clustering")
+
+# Prep + run
+ids <- sort(unique(df_mv_three$id)); chs <- sort(unique(df_mv_three$channel))
+tvec <- df_mv_three |> arrange(t) |> pull(t) |> unique()
+Y <- lapply(ids, function(i) {
+  wide <- df_mv_three |> filter(id == i) |> arrange(t) |>
+    dplyr::select(t, channel, x) |> tidyr::pivot_wider(names_from = channel, values_from = x) |>
+    dplyr::select(dplyr::all_of(chs)) |> as.matrix()
+})
+set.seed(9307)
+normal_ids <- df_mv_three |> distinct(id, label) |> filter(label == "Normal") |> pull(id)
+revealed_idx <- if (length(normal_ids) > 0) sample(normal_ids, max(1, round(0.15*length(normal_ids))), replace = FALSE) else integer(0)
+
+res_mv_three <- wicmad(Y = Y, t = tvec,
+  n_iter = 2200, burn = 700, thin = 1, alpha_prior = c(10, 1),
+  wf = "la8", J = as.integer(round(log2(length(tvec)))), boundary = "periodic",
+  mh_step_L = 0.03, mh_step_eta = 0.10, mh_step_tauB = 0.15,
+  revealed_idx = revealed_idx, K_init = 5,unpin = FALSE
+)
+dahl_mv_three <- dahl_from_res(res_mv_three)
+plot_clustered_inline(Y, tvec, dahl_mv_three$z_hat, "MV — Three mixed: Clustered (Dahl)")
+cm_mv_three <- confusion_after(df_mv_three, dahl_mv_three$z_hat, reveal_idx = revealed_idx, min_size = 2L, min_prop = 0.05, dataset_name = "MV: Three Mixed")
+if (!is.null(cm_mv_three$plot)) cm_mv_three$plot
+```
+
+# Notes
+
+- In SVD runs we **explicitly cluster on four time-series channels** (comp1..comp4) per curve: the per-component contributions \(s_{ik}\,V_k(t)\). We also **plot these components** before clustering.
+- Derivative runs now **plot the three-channel (x, x′, x″)** dataset before clustering and use `dplyr::select()` to avoid masking issues with `MASS::select`.

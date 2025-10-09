@@ -1,0 +1,28 @@
+Package: WICMAD
+Type: Package
+Title: Wavelet ICM DP-GP Sampler with Diagnostics
+Version: 0.1.0
+Authors@R: c(
+    person(given = "Your", family = "Name", role = c("aut", "cre"),
+           email = "you@example.com")
+  )
+Description: Dirichlet Process mixture model for functional curves using an Intrinsic
+    Coregionalization Model (ICM) Gaussian process residual with wavelet-domain Besov
+    shrinkage. Includes optional lightweight diagnostics and plotting.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Depends: R (>= 3.6)
+Imports:
+    MASS,
+    mvtnorm,
+    invgamma,
+    waveslim,
+    ggplot2,
+    coda
+Suggests:
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
