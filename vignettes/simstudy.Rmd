@@ -370,9 +370,10 @@ normal_ids <- df_iso |> filter(label == "Normal") |> distinct(id) |> pull(id)
 revealed_idx <- if (length(normal_ids) > 0) sample(normal_ids, max(1, round(0.15*length(normal_ids))), replace = FALSE) else integer(0)
 
 res_iso_raw <- wicmad(Y = ds_raw$Y, t = ds_raw$t,
+                         mean_intercept = TRUE,
                          n_iter = 3000, burn = 1000, thin = 1,
                          use_parallel = TRUE, K_init = 10,
-                         revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+                         revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 
 dahl_iso_raw <- dahl_from_res(res_iso_raw)
 plot_clustered_inline(ds_raw$Y, ds_raw$t, dahl_iso_raw$z_hat, "Isolated — Raw: Clustered (Dahl)")
@@ -394,9 +395,10 @@ set.seed(9307)
 revealed_idx <- if (length(normal_ids) > 0) sample(normal_ids, max(1, round(0.15*length(normal_ids))), replace = FALSE) else integer(0)
 
 res_iso_svd <- wicmad(Y = svd_iso$Y, t = svd_iso$t,
+                         mean_intercept = TRUE,
                          n_iter = 3000, burn = 1000, thin = 1,
                          use_parallel = TRUE, K_init = 10,
-                         revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+                         revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 
 dahl_iso_svd <- dahl_from_res(res_iso_svd)
 plot_clustered_inline(svd_iso$Y, svd_iso$t, dahl_iso_svd$z_hat, "Isolated — SVD(4) comps: Clustered (Dahl)")
@@ -421,9 +423,10 @@ set.seed(9307)
 revealed_idx <- if (length(normal_ids) > 0) sample(normal_ids, max(1, round(0.15*length(normal_ids))), replace = FALSE) else integer(0)
 
 res_iso_deriv <- wicmad(Y = ds_deriv$Y, t = ds_deriv$t,
+                         mean_intercept = TRUE,
                            n_iter = 3000, burn = 1000, thin = 1,
                            use_parallel = TRUE, K_init = 10,
-                           revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+                           revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 
 dahl_iso_deriv <- dahl_from_res(res_iso_deriv)
 plot_clustered_inline(ds_deriv$Y, ds_deriv$t, dahl_iso_deriv$z_hat, "Isolated — Deriv(1,2): Clustered (Dahl)")
@@ -456,9 +459,10 @@ normal_ids <- df_mag1 |> filter(label == "Normal") |> distinct(id) |> pull(id)
 revealed_idx <- if (length(normal_ids) > 0) sample(normal_ids, max(1, round(0.15*length(normal_ids))), replace = FALSE) else integer(0)
 
 res_mag1_raw <- wicmad(Y = ds_raw$Y, t = ds_raw$t,
+                         mean_intercept = TRUE,
                           n_iter = 3000, burn = 1000, thin = 1,
                           use_parallel = TRUE, K_init = 8,
-                          revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+                          revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 dahl_mag1_raw <- dahl_from_res(res_mag1_raw)
 plot_clustered_inline(ds_raw$Y, ds_raw$t, dahl_mag1_raw$z_hat, "Mag I — Raw: Clustered (Dahl)")
 cm_mag1_raw <- confusion_after(df_mag1, dahl_mag1_raw$z_hat, reveal_idx = revealed_idx, min_size = 3L, dataset_name = "Mag I — Raw")
@@ -473,9 +477,10 @@ plot_functions_before(svd_mag1$df, "Model 2 — Mag I: SVD(4) components (datase
 ds_svd <- list(Y = svd_mag1$Y, t = svd_mag1$t)  # reuse
 
 res_mag1_svd <- wicmad(Y = ds_svd$Y, t = ds_svd$t,
+                         mean_intercept = TRUE,
                           n_iter = 3000, burn = 1000, thin = 1,
                           use_parallel = TRUE, K_init = 8,
-                          revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+                          revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 dahl_mag1_svd <- dahl_from_res(res_mag1_svd)
 plot_clustered_inline(ds_svd$Y, ds_svd$t, dahl_mag1_svd$z_hat, "Mag I — SVD(4) comps: Clustered (Dahl)")
 cm_mag1_svd <- confusion_after(df_mag1, dahl_mag1_svd$z_hat, reveal_idx = revealed_idx, min_size = 3L, dataset_name = "Mag I — SVD(4) comps")
@@ -492,9 +497,10 @@ plot_functions_before(df_mag1_deriv, "Model 2 — Mag I: (x, x′, x″) (datase
 
 ds_deriv <- uni_to_model_deriv12(df_mag1, scale_each = FALSE)
 res_mag1_deriv <- wicmad(Y = ds_deriv$Y, t = ds_deriv$t,
+                         mean_intercept = TRUE,
                             n_iter = 3000, burn = 1000, thin = 1,
                             use_parallel = TRUE, K_init = 8,
-                            revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+                            revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 dahl_mag1_deriv <- dahl_from_res(res_mag1_deriv)
 plot_clustered_inline(ds_deriv$Y, ds_deriv$t, dahl_mag1_deriv$z_hat, "Mag I — Deriv(1,2): Clustered (Dahl)")
 cm_mag1_deriv <- confusion_after(df_mag1, dahl_mag1_deriv$z_hat, reveal_idx = revealed_idx, min_size = 3L, dataset_name = "Mag I — Deriv(1,2)")
@@ -523,9 +529,10 @@ normal_ids <- df_mag2 |> filter(label == "Normal") |> distinct(id) |> pull(id)
 revealed_idx <- if (length(normal_ids) > 0) sample(normal_ids, max(1, round(0.15*length(normal_ids))), replace = FALSE) else integer(0)
 
 res_mag2_raw <- wicmad(Y = ds_raw$Y, t = ds_raw$t,
+                         mean_intercept = TRUE,
                           n_iter = 3000, burn = 1000, thin = 1,
                           use_parallel = TRUE, K_init = 8,
-                          revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+                          revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 dahl_mag2_raw <- dahl_from_res(res_mag2_raw)
 plot_clustered_inline(ds_raw$Y, ds_raw$t, dahl_mag2_raw$z_hat, "Mag II — Raw: Clustered (Dahl)")
 cm_mag2_raw <- confusion_after(df_mag2, dahl_mag2_raw$z_hat, reveal_idx = revealed_idx, min_size = 3L, min_prop = 0.05, dataset_name = "Mag II — Raw")
@@ -540,9 +547,10 @@ plot_functions_before(svd_mag2$df, "Model 3 — Mag II: SVD(4) components (datas
 ds_svd <- list(Y = svd_mag2$Y, t = svd_mag2$t)
 
 res_mag2_svd <- wicmad(Y = ds_svd$Y, t = ds_svd$t,
+                         mean_intercept = TRUE,
                           n_iter = 3000, burn = 1000, thin = 1,
                           use_parallel = TRUE, K_init = 8,
-                          revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+                          revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 dahl_mag2_svd <- dahl_from_res(res_mag2_svd)
 plot_clustered_inline(ds_svd$Y, ds_svd$t, dahl_mag2_svd$z_hat, "Mag II — SVD(4) comps: Clustered (Dahl)")
 cm_mag2_svd <- confusion_after(df_mag2, dahl_mag2_svd$z_hat, reveal_idx = revealed_idx, min_size = 3L, min_prop = 0.05, dataset_name = "Mag II — SVD(4) comps")
@@ -559,9 +567,10 @@ plot_functions_before(df_mag2_deriv, "Model 3 — Mag II: (x, x′, x″) (datas
 
 ds_deriv <- uni_to_model_deriv12(df_mag2, scale_each = FALSE)
 res_mag2_deriv <- wicmad(Y = ds_deriv$Y, t = ds_deriv$t,
+                         mean_intercept = TRUE,
                             n_iter = 3000, burn = 1000, thin = 1,
                             use_parallel = TRUE, K_init = 8,
-                            revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+                            revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 dahl_mag2_deriv <- dahl_from_res(res_mag2_deriv)
 plot_clustered_inline(ds_deriv$Y, ds_deriv$t, dahl_mag2_deriv$z_hat, "Mag II — Deriv(1,2): Clustered (Dahl)")
 cm_mag2_deriv <- confusion_after(df_mag2, dahl_mag2_deriv$z_hat, reveal_idx = revealed_idx, min_size = 3L, min_prop = 0.05, dataset_name = "Mag II — Deriv(1,2)")
@@ -589,9 +598,10 @@ normal_ids <- df_shape |> filter(label == "Normal") |> distinct(id) |> pull(id)
 revealed_idx <- if (length(normal_ids) > 0) sample(normal_ids, max(1, round(0.15*length(normal_ids))), replace = FALSE) else integer(0)
 
 res_shape_raw <- wicmad(Y = ds_raw$Y, t = ds_raw$t,
+                         mean_intercept = TRUE,
                            n_iter = 3000, burn = 1000, thin = 1,
                            use_parallel = TRUE, K_init = 8,
-                           revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+                           revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 dahl_shape_raw <- dahl_from_res(res_shape_raw)
 plot_clustered_inline(ds_raw$Y, ds_raw$t, dahl_shape_raw$z_hat, "Shape — Raw: Clustered (Dahl)")
 cm_shape_raw <- confusion_after(df_shape, dahl_shape_raw$z_hat, reveal_idx = revealed_idx, min_size = 3L, min_prop = 0.05, dataset_name = "Shape — Raw")
@@ -606,9 +616,10 @@ plot_functions_before(svd_shape$df, "Model 4 — Shape: SVD(4) components (datas
 ds_svd <- list(Y = svd_shape$Y, t = svd_shape$t)
 
 res_shape_svd <- wicmad(Y = ds_svd$Y, t = ds_svd$t,
+                         mean_intercept = TRUE,
                            n_iter = 3000, burn = 1000, thin = 1,
                            use_parallel = TRUE, K_init = 8,
-                           revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+                           revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 dahl_shape_svd <- dahl_from_res(res_shape_svd)
 plot_clustered_inline(ds_svd$Y, ds_svd$t, dahl_shape_svd$z_hat, "Shape — SVD(4) comps: Clustered (Dahl)")
 cm_shape_svd <- confusion_after(df_shape, dahl_shape_svd$z_hat, reveal_idx = revealed_idx, min_size = 3L, min_prop = 0.05, dataset_name = "Shape — SVD(4) comps")
@@ -625,9 +636,10 @@ plot_functions_before(df_shape_deriv, "Model 4 — Shape: (x, x′, x″) (datas
 
 ds_deriv <- uni_to_model_deriv12(df_shape, scale_each = FALSE)
 res_shape_deriv <- wicmad(Y = ds_deriv$Y, t = ds_deriv$t,
+                         mean_intercept = TRUE,
                              n_iter = 3000, burn = 1000, thin = 1,
                              use_parallel = TRUE, K_init = 8,
-                             revealed_idx = revealed_idx, warmup_iters = 500,unpin = FALSE)
+                             revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 dahl_shape_deriv <- dahl_from_res(res_shape_deriv)
 plot_clustered_inline(ds_deriv$Y, ds_deriv$t, dahl_shape_deriv$z_hat, "Shape — Deriv(1,2): Clustered (Dahl)")
 cm_shape_deriv <- confusion_after(df_shape, dahl_shape_deriv$z_hat, reveal_idx = revealed_idx, min_size = 3L, min_prop = 0.05, dataset_name = "Shape — Deriv(1,2)")
@@ -717,6 +729,7 @@ revealed_idx <- if (length(normal_ids) > 0) {
 # --- Run model ---
 res_mv_one <- wicmad(
   Y = Y, t = tvec,
+  mean_intercept = TRUE,
   n_iter = 2200, burn = 700, thin = 1, alpha_prior = c(10, 1),
   wf = "la8", J = as.integer(round(log2(length(tvec)))), boundary = "periodic",
   mh_step_L = 0.03, mh_step_eta = 0.10, mh_step_tauB = 0.15,
@@ -778,11 +791,13 @@ set.seed(9307)
 normal_ids <- df_mv_two |> distinct(id, label) |> filter(label == "Normal") |> pull(id)
 revealed_idx <- if (length(normal_ids) > 0) sample(normal_ids, max(1, round(0.15*length(normal_ids))), replace = FALSE) else integer(0)
 
-res_mv_two <- wicmad(Y = Y, t = tvec,
+res_mv_two <- wicmad(
+  Y = Y, t = tvec,
+  mean_intercept = TRUE,
   n_iter = 2200, burn = 700, thin = 1, alpha_prior = c(10, 1),
   wf = "la8", J = as.integer(round(log2(length(tvec)))), boundary = "periodic",
   mh_step_L = 0.03, mh_step_eta = 0.10, mh_step_tauB = 0.15,
-  revealed_idx = revealed_idx, K_init = 5,unpin = FALSE
+  revealed_idx = revealed_idx, K_init = 5, unpin = FALSE
 )
 dahl_mv_two <- dahl_from_res(res_mv_two)
 plot_clustered_inline(Y, tvec, dahl_mv_two$z_hat, "MV — Two channels: Clustered (Dahl)")
@@ -833,11 +848,13 @@ set.seed(9307)
 normal_ids <- df_mv_three |> distinct(id, label) |> filter(label == "Normal") |> pull(id)
 revealed_idx <- if (length(normal_ids) > 0) sample(normal_ids, max(1, round(0.15*length(normal_ids))), replace = FALSE) else integer(0)
 
-res_mv_three <- wicmad(Y = Y, t = tvec,
+res_mv_three <- wicmad(
+  Y = Y, t = tvec,
+  mean_intercept = TRUE,
   n_iter = 2200, burn = 700, thin = 1, alpha_prior = c(10, 1),
   wf = "la8", J = as.integer(round(log2(length(tvec)))), boundary = "periodic",
   mh_step_L = 0.03, mh_step_eta = 0.10, mh_step_tauB = 0.15,
-  revealed_idx = revealed_idx, K_init = 5,unpin = FALSE
+  revealed_idx = revealed_idx, K_init = 5, unpin = FALSE
 )
 dahl_mv_three <- dahl_from_res(res_mv_three)
 plot_clustered_inline(Y, tvec, dahl_mv_three$z_hat, "MV — Three mixed: Clustered (Dahl)")

@@ -34,6 +34,7 @@ draw_new_cluster_params <- function(M, P, t, kernels, wf="la8", J=NULL, boundary
     beta_ch = beta_ch,
     sigma2  = rep(0.05, M),
     tau_sigma = 1.0,
+    bias = rep(0, M),
     cache = list(U=NULL, lam=NULL, V=NULL, s=NULL, last_kx_hash=""),
     mu_cached = NULL, mu_cached_iter = NA_integer_,
     acc = .draw_empty_acc(M, kernels)
@@ -59,6 +60,9 @@ ensure_complete_cache <- function(params, kernels, k, t, M) {
   }
   if (is.null(params[[k]]$thetas[[ params[[k]]$kern_idx ]])) {
     params[[k]]$thetas[[ params[[k]]$kern_idx ]] <- kernels[[ params[[k]]$kern_idx ]]$pstar()
+  }
+  if (is.null(params[[k]]$bias) || length(params[[k]]$bias) != M) {
+    params[[k]]$bias <- rep(0, M)
   }
 
   eeB <- eig_Bshape(params[[k]]$L, M)
