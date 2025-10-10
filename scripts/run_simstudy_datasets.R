@@ -1,12 +1,16 @@
 #!/usr/bin/env Rscript
 
-suppressPackageStartupMessages({
-  library(dplyr)
-  library(tidyr)
-  library(purrr)
-  library(ggplot2)
-  library(WICMAD)
-})
+# Ensure required packages are installed
+req <- c("dplyr", "tidyr", "purrr", "ggplot2","devtools")
+inst <- req[!(req %in% rownames(installed.packages()))]
+if (length(inst)) {
+  install.packages(inst, repos = "https://cloud.r-project.org",
+                   Ncpus = max(1L, parallel::detectCores(logical = TRUE)))
+}
+
+devtools::load_all()
+
+
 
 # -----------------------------------------------------------------------------
 # Global simulation controls
