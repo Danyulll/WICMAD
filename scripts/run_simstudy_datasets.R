@@ -263,9 +263,9 @@ svd_components_dataset <- function(df, r = 4) {
   df_comps <- bind_rows(comps_list)
   Y <- lapply(seq_len(N), function(i) {
     df_comps |> filter(id == ids[i]) |> arrange(t) |>
-      select(t, channel, x) |>
+      dplyr::select(t, channel, x) |>
       pivot_wider(names_from = channel, values_from = x) |>
-      select(all_of(paste0("comp", seq_len(r)))) |>
+      dplyr::select(all_of(paste0("comp", seq_len(r)))) |>
       as.matrix()
   })
   list(df = df_comps, Y = Y, t = tvec, ids = ids, labels = lab_by_id)
