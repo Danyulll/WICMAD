@@ -551,16 +551,19 @@ create_univariate_tasks <- function(df, base_id, base_title, K_init = 8L,
   revealed_idx <- sample_revealed_idx(df)
   ds_raw <- uni_to_model_raw(df)
   svd_ds <- svd_components_dataset(df, r = 4)
+  
   df_deriv <- df |>
-    group_by(id) |>
-    arrange(t, .by_group = TRUE) |>
-    mutate(dx = num_deriv1(x, t), ddx = num_deriv2(x, t)) |>
-    ungroup() |>
-    pivot_longer(cols = c(x, dx, ddx), names_to = "channel", values_to = "val") |>
-    mutate(channel = factor(channel, levels = c("x", "dx", "ddx")),
-           x = val) |>
-    select(-val)
+    dplyr::group_by(id) |>
+    dplyr::arrange(t, .by_group = TRUE) |>
+    dplyr::mutate(dx = num_deriv1(x, t), ddx = num_deriv2(x, t)) |>
+    dplyr::ungroup() |>
+    tidyr::pivot_longer(cols = c(x, dx, ddx), names_to = "channel", values_to = "val") |>
+    dplyr::mutate(channel = factor(channel, levels = c("x", "dx", "ddx")),
+                  x = val) |>
+    dplyr::select(-val)
+  
   ds_deriv <- uni_to_model_deriv12(df, scale_each = FALSE)
+  
   list(
     list(
       id = paste0(base_id, "_raw"),
@@ -601,15 +604,16 @@ create_univariate_tasks <- function(df, base_id, base_title, K_init = 8L,
   )
 }
 
+
 create_mv_task <- function(df, id, title, K_init = 5L, min_size = 2L, min_prop = 0.05) {
   ids <- sort(unique(df$id))
   chs <- sort(unique(df$channel))
-  tvec <- df |> arrange(t) |> pull(t) |> unique()
+  tvec <- df |> dplyr::arrange(t) |> dplyr::pull(t) |> unique()
   Y <- lapply(ids, function(i) {
-    df |> filter(id == i) |> arrange(t) |>
-      select(t, channel, x) |>
-      pivot_wider(names_from = channel, values_from = x) |>
-      select(all_of(chs)) |>
+    df |> dplyr::filter(id == i) |> dplyr::arrange(t) |>
+      dplyr::select(t, channel, x) |>
+      tidyr::pivot_wider(names_from = channel, values_from = x) |>
+      dplyr::select(dplyr::all_of(chs)) |>
       as.matrix()
   })
   list(
@@ -625,6 +629,7 @@ create_mv_task <- function(df, id, title, K_init = 5L, min_size = 2L, min_prop =
     min_prop = min_prop
   )
 }
+
 
 # -----------------------------------------------------------------------------
 # Assemble task list
