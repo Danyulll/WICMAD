@@ -1,24 +1,20 @@
 #!/usr/bin/env Rscript
 
-
-
-devtools::load_all()
-
+library(devtools)
 library(dplyr)
 library(tidyr)
 library(purrr)
 library(ggplot2)
-library(devtools)
 
-
+devtools::install()
 
 # -----------------------------------------------------------------------------
 # Global simulation controls
 # -----------------------------------------------------------------------------
 P_use <- 128L
-iterations <- 10000L
-burnin <- 2000L
-thin <- 5L
+iterations <- 510000L
+burnin <- 10000L
+thin <- 10L
 use_parallel <- FALSE
 warmup_iters <- 500L
 
