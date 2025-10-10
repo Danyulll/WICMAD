@@ -1,14 +1,14 @@
 #!/usr/bin/env Rscript
 
-# Ensure required packages are installed
-req <- c("dplyr", "tidyr", "purrr", "ggplot2","devtools")
-inst <- req[!(req %in% rownames(installed.packages()))]
-if (length(inst)) {
-  install.packages(inst, repos = "https://cloud.r-project.org",
-                   Ncpus = max(1L, parallel::detectCores(logical = TRUE)))
-}
+
 
 devtools::load_all()
+
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(ggplot2)
+library(devtools)
 
 
 
