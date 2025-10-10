@@ -10,7 +10,6 @@ wicmad <- function(
     mh_step_L = 0.03, mh_step_eta = 0.10, mh_step_tauB = 0.15,
     revealed_idx = integer(0),
     K_init = 5,
-    use_parallel = FALSE,
     warmup_iters = 100,
     unpin = TRUE,
     kappa_pi = 0.6, c2 = 1.0, tau_pi = 40,
