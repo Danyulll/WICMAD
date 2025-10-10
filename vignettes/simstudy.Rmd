@@ -372,7 +372,7 @@ revealed_idx <- if (length(normal_ids) > 0) sample(normal_ids, max(1, round(0.15
 res_iso_raw <- wicmad(Y = ds_raw$Y, t = ds_raw$t,
                          mean_intercept = TRUE,
                          n_iter = 3000, burn = 1000, thin = 1,
-                         use_parallel = TRUE, K_init = 10,
+                         K_init = 10,
                          revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 
 dahl_iso_raw <- dahl_from_res(res_iso_raw)
@@ -397,7 +397,7 @@ revealed_idx <- if (length(normal_ids) > 0) sample(normal_ids, max(1, round(0.15
 res_iso_svd <- wicmad(Y = svd_iso$Y, t = svd_iso$t,
                          mean_intercept = TRUE,
                          n_iter = 3000, burn = 1000, thin = 1,
-                         use_parallel = TRUE, K_init = 10,
+                         K_init = 10,
                          revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 
 dahl_iso_svd <- dahl_from_res(res_iso_svd)
@@ -425,7 +425,7 @@ revealed_idx <- if (length(normal_ids) > 0) sample(normal_ids, max(1, round(0.15
 res_iso_deriv <- wicmad(Y = ds_deriv$Y, t = ds_deriv$t,
                          mean_intercept = TRUE,
                            n_iter = 3000, burn = 1000, thin = 1,
-                           use_parallel = TRUE, K_init = 10,
+                           K_init = 10,
                            revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 
 dahl_iso_deriv <- dahl_from_res(res_iso_deriv)
@@ -461,7 +461,7 @@ revealed_idx <- if (length(normal_ids) > 0) sample(normal_ids, max(1, round(0.15
 res_mag1_raw <- wicmad(Y = ds_raw$Y, t = ds_raw$t,
                          mean_intercept = TRUE,
                           n_iter = 3000, burn = 1000, thin = 1,
-                          use_parallel = TRUE, K_init = 8,
+                          K_init = 8,
                           revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 dahl_mag1_raw <- dahl_from_res(res_mag1_raw)
 plot_clustered_inline(ds_raw$Y, ds_raw$t, dahl_mag1_raw$z_hat, "Mag I — Raw: Clustered (Dahl)")
@@ -479,7 +479,7 @@ ds_svd <- list(Y = svd_mag1$Y, t = svd_mag1$t)  # reuse
 res_mag1_svd <- wicmad(Y = ds_svd$Y, t = ds_svd$t,
                          mean_intercept = TRUE,
                           n_iter = 3000, burn = 1000, thin = 1,
-                          use_parallel = TRUE, K_init = 8,
+                          K_init = 8,
                           revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 dahl_mag1_svd <- dahl_from_res(res_mag1_svd)
 plot_clustered_inline(ds_svd$Y, ds_svd$t, dahl_mag1_svd$z_hat, "Mag I — SVD(4) comps: Clustered (Dahl)")
@@ -499,7 +499,7 @@ ds_deriv <- uni_to_model_deriv12(df_mag1, scale_each = FALSE)
 res_mag1_deriv <- wicmad(Y = ds_deriv$Y, t = ds_deriv$t,
                          mean_intercept = TRUE,
                             n_iter = 3000, burn = 1000, thin = 1,
-                            use_parallel = TRUE, K_init = 8,
+                            K_init = 8,
                             revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 dahl_mag1_deriv <- dahl_from_res(res_mag1_deriv)
 plot_clustered_inline(ds_deriv$Y, ds_deriv$t, dahl_mag1_deriv$z_hat, "Mag I — Deriv(1,2): Clustered (Dahl)")
@@ -531,7 +531,7 @@ revealed_idx <- if (length(normal_ids) > 0) sample(normal_ids, max(1, round(0.15
 res_mag2_raw <- wicmad(Y = ds_raw$Y, t = ds_raw$t,
                          mean_intercept = TRUE,
                           n_iter = 3000, burn = 1000, thin = 1,
-                          use_parallel = TRUE, K_init = 8,
+                          K_init = 8,
                           revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 dahl_mag2_raw <- dahl_from_res(res_mag2_raw)
 plot_clustered_inline(ds_raw$Y, ds_raw$t, dahl_mag2_raw$z_hat, "Mag II — Raw: Clustered (Dahl)")
@@ -549,7 +549,7 @@ ds_svd <- list(Y = svd_mag2$Y, t = svd_mag2$t)
 res_mag2_svd <- wicmad(Y = ds_svd$Y, t = ds_svd$t,
                          mean_intercept = TRUE,
                           n_iter = 3000, burn = 1000, thin = 1,
-                          use_parallel = TRUE, K_init = 8,
+                          K_init = 8,
                           revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 dahl_mag2_svd <- dahl_from_res(res_mag2_svd)
 plot_clustered_inline(ds_svd$Y, ds_svd$t, dahl_mag2_svd$z_hat, "Mag II — SVD(4) comps: Clustered (Dahl)")
@@ -569,7 +569,7 @@ ds_deriv <- uni_to_model_deriv12(df_mag2, scale_each = FALSE)
 res_mag2_deriv <- wicmad(Y = ds_deriv$Y, t = ds_deriv$t,
                          mean_intercept = TRUE,
                             n_iter = 3000, burn = 1000, thin = 1,
-                            use_parallel = TRUE, K_init = 8,
+                            K_init = 8,
                             revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 dahl_mag2_deriv <- dahl_from_res(res_mag2_deriv)
 plot_clustered_inline(ds_deriv$Y, ds_deriv$t, dahl_mag2_deriv$z_hat, "Mag II — Deriv(1,2): Clustered (Dahl)")
@@ -600,7 +600,7 @@ revealed_idx <- if (length(normal_ids) > 0) sample(normal_ids, max(1, round(0.15
 res_shape_raw <- wicmad(Y = ds_raw$Y, t = ds_raw$t,
                          mean_intercept = TRUE,
                            n_iter = 3000, burn = 1000, thin = 1,
-                           use_parallel = TRUE, K_init = 8,
+                           K_init = 8,
                            revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 dahl_shape_raw <- dahl_from_res(res_shape_raw)
 plot_clustered_inline(ds_raw$Y, ds_raw$t, dahl_shape_raw$z_hat, "Shape — Raw: Clustered (Dahl)")
@@ -618,7 +618,7 @@ ds_svd <- list(Y = svd_shape$Y, t = svd_shape$t)
 res_shape_svd <- wicmad(Y = ds_svd$Y, t = ds_svd$t,
                          mean_intercept = TRUE,
                            n_iter = 3000, burn = 1000, thin = 1,
-                           use_parallel = TRUE, K_init = 8,
+                           K_init = 8,
                            revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 dahl_shape_svd <- dahl_from_res(res_shape_svd)
 plot_clustered_inline(ds_svd$Y, ds_svd$t, dahl_shape_svd$z_hat, "Shape — SVD(4) comps: Clustered (Dahl)")
@@ -638,7 +638,7 @@ ds_deriv <- uni_to_model_deriv12(df_shape, scale_each = FALSE)
 res_shape_deriv <- wicmad(Y = ds_deriv$Y, t = ds_deriv$t,
                          mean_intercept = TRUE,
                              n_iter = 3000, burn = 1000, thin = 1,
-                             use_parallel = TRUE, K_init = 8,
+                             K_init = 8,
                              revealed_idx = revealed_idx, warmup_iters = 500, unpin = FALSE)
 dahl_shape_deriv <- dahl_from_res(res_shape_deriv)
 plot_clustered_inline(ds_deriv$Y, ds_deriv$t, dahl_shape_deriv$z_hat, "Shape — Deriv(1,2): Clustered (Dahl)")
