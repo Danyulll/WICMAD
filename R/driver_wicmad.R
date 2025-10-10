@@ -80,6 +80,15 @@ wicmad <- function(
   K_s     <- if (keep > 0) integer(keep) else integer(0)
   loglik_s<- if (keep > 0) numeric(keep) else numeric(0)
   
+  adj_rand_index <- function(z1, z2) {
+    tab <- table(z1, z2)
+    sum_comb <- sum(choose(tab, 2))
+    a <- rowSums(tab); b <- colSums(tab)
+    sum_a <- sum(choose(a, 2)); sum_b <- sum(choose(b, 2))
+    tot <- choose(length(z1), 2)
+    (sum_comb - (sum_a*sum_b)/tot) / (0.5*(sum_a+sum_b) - (sum_a*sum_b)/tot)
+  }
+
   diag <- NULL
   if (isTRUE(diagnostics)) {
     zeros <- matrix(0, P, M)
@@ -98,9 +107,11 @@ wicmad <- function(
       meta = list(P=P, M=M, J=J, monitor_levels=monitor_levels, track_ids=track_ids),
       global = list(K_occ=if (keep>0) rep(NA_real_, keep) else numeric(0),
                     alpha= if (keep>0) rep(NA_real_, keep) else numeric(0),
-                    loglik=if (keep>0) rep(NA_real_, keep) else numeric(0)),
+                    loglik=if (keep>0) rep(NA_real_, keep) else numeric(0),
+                    K_occ_all=if (n_iter >= 1) rep(NA_real_, n_iter) else numeric(0)),
       clusters = list(A=list(), B=list()),
-      ari = if (keep>1) rep(NA_real_, keep-1) else numeric(0)
+      ari = if (keep>1) rep(NA_real_, keep-1) else numeric(0),
+      ari_all = if (n_iter >= 1) rep(NA_real_, n_iter) else numeric(0)
     )
   }
   
@@ -205,6 +216,8 @@ wicmad <- function(
     }
     
     for (kk in seq_along(params)) params <- ensure_complete_cache(params, kernels, kk, t, M)
+    if (isTRUE(diagnostics)) z_prev <- z
+
     for (i in 1:N) z[i] <- assign_one(i)
     
     v  <- update_v_given_z(v, z, alpha)
@@ -252,6 +265,10 @@ wicmad <- function(
     
     # ---- Occupied clusters this iteration; record to K_hist *every* iter
     Kocc <- length(unique(z))
+    if (isTRUE(diagnostics)) {
+      diag$ari_all[iter] <- adj_rand_index(z_prev, z)
+      diag$global$K_occ_all[iter] <- Kocc
+    }
     K_hist[iter] <- as.numeric(Kocc)
     
     # ---- Escobar–West update for alpha
@@ -345,14 +362,6 @@ wicmad <- function(
   
   # ---- ARI across consecutive saved draws (if any)
   if (isTRUE(diagnostics) && keep >= 2) {
-    adj_rand_index <- function(z1, z2) {
-      tab <- table(z1, z2)
-      sum_comb <- sum(choose(tab, 2))
-      a <- rowSums(tab); b <- colSums(tab)
-      sum_a <- sum(choose(a, 2)); sum_b <- sum(choose(b, 2))
-      tot <- choose(length(z1), 2)
-      (sum_comb - (sum_a*sum_b)/tot) / (0.5*(sum_a+sum_b) - (sum_a*sum_b)/tot)
-    }
     for (s in 2:keep) {
       diag$ari[s-1] <- adj_rand_index(Z_s[s-1,], Z_s[s,])
     }
