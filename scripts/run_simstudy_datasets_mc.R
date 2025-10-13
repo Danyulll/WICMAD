@@ -366,10 +366,29 @@ confusion_after <- function(df_long, z_hat, reveal_idx = integer(0),
       labs(title = ttl, x = "Predicted", y = "True") +
       theme_minimal()
   }
-  list(confmat = confmat,
-       metrics = list(acc = acc, prec = prec, rec = rec, f1 = f1),
-       bin = bin,
-       plot = p)
+  list(
+    confmat = confmat,
+    metrics = list(acc = acc, prec = prec, rec = rec, f1 = f1),
+    counts = list(tp = TP, tn = TN, fp = FP, fn = FN),
+    bin = bin,
+    plot = p
+  )
+}
+
+plot_confusion_heatmap <- function(conf_mat, dataset_name,
+                                   title_prefix = "Average Confusion Matrix",
+                                   digits = 2) {
+  stopifnot(is.matrix(conf_mat), all(dim(conf_mat) == c(2L, 2L)))
+  cm_df <- as.data.frame(as.table(conf_mat))
+  names(cm_df) <- c("Truth", "Pred", "Freq")
+  label_fun <- function(x) format(round(x, digits), nsmall = digits, trim = TRUE)
+  ggplot(cm_df, aes(x = Pred, y = Truth, fill = Freq)) +
+    geom_tile(color = "white") +
+    geom_text(aes(label = label_fun(Freq)), fontface = "bold") +
+    scale_fill_gradient(low = "#f7fbff", high = "#08306b") +
+    labs(title = paste(title_prefix, dataset_name, sep = " — "),
+         x = "Predicted", y = "True", fill = "Avg") +
+    theme_minimal()
 }
 
 # -----------------------------------------------------------------------------
@@ -704,11 +723,7 @@ run_dataset_task <- function(task) {
                         min_size = task$min_size,
                         min_prop = task$min_prop,
                         dataset_name = task$display_name,
-                        make_plot = TRUE)
-  if (!is.null(cm$plot)) {
-    conf_path <- file.path(task$output_dir, "03_confusion.png")
-    ggplot2::ggsave(conf_path, cm$plot, dpi = 150, width = 6, height = 5, units = "in")
-  }
+                        make_plot = FALSE)
 
   diag_dir <- file.path(task$output_dir, "diagnostics")
   save_diagnostics_from_res(res, Y = task$Y, t = task$t, out_dir = diag_dir,
@@ -721,7 +736,7 @@ run_dataset_task <- function(task) {
     run_seed = task$run_seed,
     output_dir = task$output_dir,
     result_path = res_path,
-    confusion = cm$metrics
+    confusion = cm
   )
 }
 
@@ -931,11 +946,101 @@ summary_df <- purrr::map_dfr(results, function(x) {
     mc_run = x$run_id,
     run_seed = x$run_seed,
     output_dir = x$output_dir,
-    accuracy = x$confusion$acc,
-    precision = x$confusion$prec,
-    recall = x$confusion$rec,
-    f1 = x$confusion$f1
+    accuracy = x$confusion$metrics$acc,
+    precision = x$confusion$metrics$prec,
+    recall = x$confusion$metrics$rec,
+    f1 = x$confusion$metrics$f1,
+    tp = x$confusion$counts$tp,
+    tn = x$confusion$counts$tn,
+    fp = x$confusion$counts$fp,
+    fn = x$confusion$counts$fn
   )
 })
 utils::write.csv(summary_df, summary_path, row.names = FALSE)
 message("Saved summary metrics to ", normalizePath(summary_path, winslash = "/", mustWork = FALSE))
+
+dataset_summary <- summary_df |>
+  dplyr::group_by(dataset_id, dataset_label) |>
+  dplyr::summarise(
+    mc_runs = dplyr::n(),
+    accuracy_mean = mean(accuracy, na.rm = TRUE),
+    precision_mean = mean(precision, na.rm = TRUE),
+    recall_mean = mean(recall, na.rm = TRUE),
+    f1_mean = mean(f1, na.rm = TRUE),
+    tn_mean = mean(tn, na.rm = TRUE),
+    fp_mean = mean(fp, na.rm = TRUE),
+    fn_mean = mean(fn, na.rm = TRUE),
+    tp_mean = mean(tp, na.rm = TRUE),
+    tn_total = sum(tn, na.rm = TRUE),
+    fp_total = sum(fp, na.rm = TRUE),
+    fn_total = sum(fn, na.rm = TRUE),
+    tp_total = sum(tp, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  dplyr::mutate(
+    total_obs = tn_total + fp_total + fn_total + tp_total,
+    accuracy_from_totals = dplyr::if_else(total_obs > 0,
+      (tn_total + tp_total) / total_obs, NA_real_
+    ),
+    precision_from_totals = dplyr::if_else((tp_total + fp_total) > 0,
+      tp_total / (tp_total + fp_total), NA_real_
+    ),
+    recall_from_totals = dplyr::if_else((tp_total + fn_total) > 0,
+      tp_total / (tp_total + fn_total), NA_real_
+    ),
+    f1_from_totals = dplyr::if_else(
+      !is.na(precision_from_totals) & !is.na(recall_from_totals) &
+        (precision_from_totals + recall_from_totals) > 0,
+      2 * precision_from_totals * recall_from_totals /
+        (precision_from_totals + recall_from_totals),
+      NA_real_
+    )
+  )
+
+dataset_summary_path <- file.path(output_root, "dataset_summary_metrics.csv")
+utils::write.csv(dataset_summary, dataset_summary_path, row.names = FALSE)
+message("Saved dataset-level summary metrics to ",
+        normalizePath(dataset_summary_path, winslash = "/", mustWork = FALSE))
+
+for (i in seq_len(nrow(dataset_summary))) {
+  ds_row <- dataset_summary[i, ]
+  ds_dir <- file.path(output_root, ds_row$dataset_id)
+  dir.create(ds_dir, recursive = TRUE, showWarnings = FALSE)
+  mean_conf <- matrix(
+    c(ds_row$tn_mean, ds_row$fp_mean, ds_row$fn_mean, ds_row$tp_mean),
+    nrow = 2L, byrow = TRUE,
+    dimnames = list(c("Normal", "Anomaly"), c("Normal", "Anomaly"))
+  )
+  if (all(is.na(mean_conf))) {
+    warning(sprintf("No confusion matrix data available for dataset '%s'; skipping average confusion plot.",
+                    ds_row$dataset_id))
+  } else {
+    conf_plot <- plot_confusion_heatmap(mean_conf, ds_row$dataset_label)
+    conf_avg_path <- file.path(ds_dir, "confusion_matrix_average.png")
+    ggplot2::ggsave(conf_avg_path, conf_plot, dpi = 150, width = 6, height = 5, units = "in")
+  }
+
+  dataset_metrics <- tibble::tibble(
+    dataset_id = ds_row$dataset_id,
+    dataset_label = ds_row$dataset_label,
+    mc_runs = ds_row$mc_runs,
+    accuracy_mean = ds_row$accuracy_mean,
+    precision_mean = ds_row$precision_mean,
+    recall_mean = ds_row$recall_mean,
+    f1_mean = ds_row$f1_mean,
+    accuracy_from_totals = ds_row$accuracy_from_totals,
+    precision_from_totals = ds_row$precision_from_totals,
+    recall_from_totals = ds_row$recall_from_totals,
+    f1_from_totals = ds_row$f1_from_totals,
+    tn_mean = ds_row$tn_mean,
+    fp_mean = ds_row$fp_mean,
+    fn_mean = ds_row$fn_mean,
+    tp_mean = ds_row$tp_mean,
+    tn_total = ds_row$tn_total,
+    fp_total = ds_row$fp_total,
+    fn_total = ds_row$fn_total,
+    tp_total = ds_row$tp_total
+  )
+  metrics_path <- file.path(ds_dir, "dataset_metrics_summary.csv")
+  utils::write.csv(dataset_metrics, metrics_path, row.names = FALSE)
+}
