@@ -12,9 +12,9 @@ devtools::install()
 # Global simulation controls
 # -----------------------------------------------------------------------------
 P_use <- 128L
-iterations <- 510000L
-burnin <- 10000L
-thin <- 10L
+iterations <- 60000L
+burnin <- 5000L
+thin <- 5L
 use_parallel <- FALSE
 warmup_iters <- 500L
 
@@ -798,6 +798,77 @@ run_dataset_task <- function(task) {
   )
 }
 
+make_progress_tracker <- function(total, description = "Progress") {
+  stopifnot(total >= 0L)
+  if (total == 0L) {
+    return(list(
+      tick = function() invisible(NULL),
+      finish = function() invisible(NULL)
+    ))
+  }
+  if (requireNamespace("progress", quietly = TRUE)) {
+    pb <- progress::progress_bar$new(
+      total = total,
+      format = sprintf("%s [:bar] :current/:total (:percent) eta: :eta elapsed: :elapsed", description),
+      clear = FALSE,
+      show_after = 0
+    )
+    list(
+      tick = function() pb$tick(),
+      finish = function() if (!pb$finished) pb$terminate()
+    )
+  } else {
+    start_time <- Sys.time()
+    completed <- 0L
+    bar_width <- 30L
+    message(sprintf("Package 'progress' not installed; using basic progress indicator for %s.", description))
+    format_time <- function(seconds) {
+      if (!is.finite(seconds)) return("--:--:--")
+      seconds <- round(seconds)
+      hours <- seconds %/% 3600L
+      minutes <- (seconds %% 3600L) %/% 60L
+      secs <- seconds %% 60L
+      sprintf("%02d:%02d:%02d", hours, minutes, secs)
+    }
+    render <- function() {
+      percent <- if (total > 0) completed / total else 1
+      filled <- floor(bar_width * percent)
+      if (filled >= bar_width) {
+        bar <- strrep("=", bar_width)
+      } else {
+        bar <- paste0(strrep("=", filled), ">", strrep(" ", bar_width - filled - 1L))
+      }
+      elapsed <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
+      eta <- if (completed > 0L) elapsed / completed * (total - completed) else Inf
+      msg <- sprintf(
+        "\r%s [%s] %d/%d (%.1f%%) ETA: %s Elapsed: %s",
+        description,
+        bar,
+        completed,
+        total,
+        percent * 100,
+        format_time(eta),
+        format_time(elapsed)
+      )
+      cat(msg)
+      flush.console()
+    }
+    list(
+      tick = function() {
+        completed <<- min(total, completed + 1L)
+        render()
+      },
+      finish = function() {
+        if (completed < total) {
+          completed <<- total
+          render()
+        }
+        cat("\n")
+      }
+    )
+  }
+}
+
 threads_to_use <- min(threads_needed, parallel::detectCores(logical = TRUE))
 if (threads_to_use < threads_needed) {
   warning(sprintf("Only %d cores detected; datasets will be processed on %d workers instead of %d.",
@@ -805,7 +876,14 @@ if (threads_to_use < threads_needed) {
 }
 
 if (threads_to_use <= 1L) {
-  results <- lapply(all_jobs, run_dataset_task)
+  message(sprintf("Running %d dataset/model combinations (sequential mode)...", total_jobs))
+  progress <- make_progress_tracker(total_jobs, description = "Processing")
+  results <- vector("list", length = total_jobs)
+  for (idx in seq_along(all_jobs)) {
+    results[[idx]] <- run_dataset_task(all_jobs[[idx]])
+    progress$tick()
+  }
+  progress$finish()
 } else {
   cl <- parallel::makeCluster(threads_to_use)
   on.exit(parallel::stopCluster(cl), add = TRUE)
