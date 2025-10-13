@@ -869,6 +869,53 @@ make_progress_tracker <- function(total, description = "Progress") {
   }
 }
 
+run_parallel_with_progress <- function(cl, tasks, worker_fun, description = "Progress") {
+  total <- length(tasks)
+  progress <- make_progress_tracker(total, description)
+  results <- vector("list", total)
+  if (total == 0L) {
+    progress$finish()
+    return(results)
+  }
+
+  worker_count <- length(cl)
+  next_task <- 1L
+  completed <- 0L
+
+  submit_task <- function(worker_idx, task_idx) {
+    parallel:::sendCall(cl[[worker_idx]], worker_fun, list(tasks[[task_idx]]), tag = task_idx)
+  }
+
+  for (worker_idx in seq_len(worker_count)) {
+    if (next_task > total) break
+    submit_task(worker_idx, next_task)
+    next_task <- next_task + 1L
+  }
+
+  while (completed < total) {
+    res <- parallel:::recvOneResult(cl)
+    worker_idx <- res$node
+    task_idx <- res$tag
+    if (inherits(res$value, "try-error")) {
+      progress$finish()
+      err_condition <- attr(res$value, "condition")
+      err_message <- if (!is.null(err_condition)) conditionMessage(err_condition) else as.character(res$value)
+      stop(sprintf("Parallel worker %d failed on job %d: %s", worker_idx, task_idx, err_message))
+    }
+    results[[task_idx]] <- res$value
+    completed <- completed + 1L
+    progress$tick()
+
+    if (next_task <= total) {
+      submit_task(worker_idx, next_task)
+      next_task <- next_task + 1L
+    }
+  }
+
+  progress$finish()
+  results
+}
+
 threads_to_use <- min(threads_needed, parallel::detectCores(logical = TRUE))
 if (threads_to_use < threads_needed) {
   warning(sprintf("Only %d cores detected; datasets will be processed on %d workers instead of %d.",
@@ -885,6 +932,10 @@ if (threads_to_use <= 1L) {
   }
   progress$finish()
 } else {
+  message(sprintf(
+    "Running %d dataset/model combinations across %d workers (parallel mode)...",
+    total_jobs, threads_to_use
+  ))
   cl <- parallel::makeCluster(threads_to_use)
   on.exit(parallel::stopCluster(cl), add = TRUE)
   parallel::clusterEvalQ(cl, {
@@ -903,7 +954,12 @@ if (threads_to_use <= 1L) {
                 "with_kernel_bias_mode"),
     envir = environment()
   )
-  results <- parallel::parLapply(cl, all_jobs, run_dataset_task)
+  results <- run_parallel_with_progress(
+    cl,
+    all_jobs,
+    worker_fun = run_dataset_task,
+    description = "Processing"
+  )
 }
 
 message("All dataset runs completed.")
