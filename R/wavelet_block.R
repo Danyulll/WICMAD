@@ -1,6 +1,55 @@
 
 # Wavelet block with Besov priors ---------------------------------------
 
+#' Update Wavelet Parameters with Besov Priors
+#'
+#' Performs MCMC updates for wavelet coefficients using Besov priors with spike-and-slab
+#' structure. This function implements the core sparsity-inducing updates for wavelet
+#' coefficients in the WICMAD model, using level-specific shrinkage and adaptive sparsity.
+#'
+#' @param idx Integer vector of curve indices to update
+#' @param precomp Precomputed wavelet transform object from \code{precompute_wavelets()}
+#' @param M Integer number of channels/dimensions
+#' @param wpar List containing wavelet parameters (gamma_ch, pi_level, g_level)
+#' @param sigma2_m Numeric vector of channel-specific noise variances (length M)
+#' @param tau_sigma Numeric global scaling parameter for noise variances
+#' @param kappa_pi Numeric sparsity parameter for Besov prior (default: 0.6)
+#' @param c2 Numeric decay parameter for level-specific sparsity (default: 1.0)
+#' @param tau_pi Numeric concentration parameter for Beta prior (default: 40)
+#' @param g_hyp Matrix of hyperparameters for g_level (shape, rate) or NULL
+#' @param a_sig Numeric shape parameter for sigma2_m prior (default: 2.5)
+#' @param b_sig Numeric rate parameter for sigma2_m prior (default: 0.02)
+#' @param a_tau Numeric shape parameter for tau_sigma prior (default: 2.0)
+#' @param b_tau Numeric rate parameter for tau_sigma prior (default: 2.0)
+#' @param bias_coeff Numeric vector of bias coefficients or NULL
+#'
+#' @return List containing:
+#'   \item{wpar}{Updated wavelet parameters (gamma_ch, pi_level, g_level)}
+#'   \item{beta_ch}{List of updated wavelet coefficients for each channel}
+#'   \item{sigma2_m}{Updated channel-specific noise variances}
+#'   \item{tau_sigma}{Updated global scaling parameter}
+#'   \item{maps}{Wavelet transform mapping information}
+#'
+#' @details The function implements a spike-and-slab prior for wavelet coefficients:
+#' \deqn{\pi(\beta_{j,k}) = (1-\pi_j)\delta_0(\beta_{j,k}) + \pi_j \mathcal{N}(0, \sigma^2(1+g_j))}
+#' where \eqn{\pi_j} is level-specific sparsity probability and \eqn{g_j} is level-specific
+#' shrinkage parameter. The updates include:
+#' 1. Gamma updates (sparsity indicators) using spike-and-slab likelihoods
+#' 2. G-level updates (shrinkage parameters) using inverse-Gamma priors
+#' 3. Pi-level updates (sparsity probabilities) using Beta priors with Besov structure
+#' 4. Beta sampling (active coefficients) using Gaussian posteriors
+#' 5. Sigma2_m updates (noise variances) using inverse-Gamma priors
+#' 6. Tau_sigma update (global scaling) using Gamma prior
+#'
+#' The Besov prior structure ensures that higher resolution levels have lower sparsity
+#' probabilities, encouraging smoothness while allowing for local features.
+#'
+#' @examples
+#' # Update wavelet parameters for a cluster
+#' result <- update_cluster_wavelet_params_besov(
+#'   idx = 1:10, precomp = precomp_obj, M = 3, wpar = wpar_list,
+#'   sigma2_m = c(0.1, 0.15, 0.12), tau_sigma = 1.0
+#' )
 update_cluster_wavelet_params_besov <- function(
     idx, precomp, M, wpar, sigma2_m, tau_sigma,
     kappa_pi = 0.6, c2 = 1.0, tau_pi = 40,

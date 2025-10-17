@@ -1,0 +1,62 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{3}{section.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.1}What is WICMAD?}{3}{subsection.1.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.2}Core Architecture Overview}{3}{subsection.1.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Data Flow Architecture}}{3}{figure.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2}Wavelet Processing Module}{4}{section.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Overview}{4}{subsection.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Wavelets}{4}{subsection.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3}Kernel System}{5}{section.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Overview}{5}{subsection.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Core Functions}{5}{subsection.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.2.1}\texttt  {make\_kernels()}}{5}{subsubsection.3.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Kernels}{7}{subsection.3.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Available Kernel Functions}}{7}{table.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4}Intrinsic Coregionalization Model (ICM) Section}{8}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Overview}{8}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Generative Model and Covariance Structure}{9}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Coregionalization Matrix Decomposition}{9}{subsection.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Kronecker Form and the Eigen Trick}{9}{subsection.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}Code Walkthrough}{10}{subsection.4.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.5.1}\texttt  {.build\_icm\_cache()}: eigens, blocks, and Cholesky}{10}{subsubsection.4.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.5.2}\texttt  {fast\_icm\_loglik\_curve()}: quadratic form and log-det}{11}{subsubsection.4.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5}Wavelet Block with Shrinkage Priors}{11}{section.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Overview}{11}{subsection.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Hierarchical Prior and Shrinkage Structure}{12}{subsection.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Posterior Updates (Closed Forms)}{12}{subsection.5.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Step 1: Inclusion indicators $\gamma _{m,j,k}$.}{12}{subsection.5.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Step 2: Slab inflation $g_j$.}{12}{subsection.5.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Step 3: Levelwise sparsity $\pi _j$.}{12}{subsection.5.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Step 4: Coefficients $\beta _{m,j,k}$ (active only).}{13}{subsection.5.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Step 5: Channel noise $\sigma _m^2$.}{13}{subsection.5.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Step 6: Global scale $\tau _\sigma $.}{13}{subsection.5.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.4}Code Walkthrough}{13}{subsection.5.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.4.1}\texttt  {update\_cluster\_wavelet\_params\_besov()}: hierarchical Gibbs updates}{13}{subsubsection.5.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6}Main Driver Function}{16}{section.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Overview}{16}{subsection.6.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}Function Structure}{16}{subsection.6.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.3}Initialization and Setup}{16}{subsection.6.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.4}Main MCMC Loop Structure}{17}{subsection.6.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.5}Cluster Assignment Updates}{17}{subsection.6.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.6}Cluster Assignment Function}{18}{subsection.6.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.7}Warm-up Period and Revealed Curves}{19}{subsection.6.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.8}Wavelet Block Updates}{19}{subsection.6.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.9}Kernel and ICM Updates}{20}{subsection.6.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {6.9.1}Carlin-Chib Kernel Swapping}{20}{subsubsection.6.9.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {6.9.2}Metropolis-Hastings Parameter Updates}{21}{subsubsection.6.9.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{L Matrix Updates}{22}{lstnumber.-28.14}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Eta Vector Updates}{22}{lstnumber.-29.19}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Tau\_B Scalar Updates}{23}{lstnumber.-30.22}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.10}Escobar-West Update for DP Concentration Parameter}{24}{subsection.6.10}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7}Postprocessing}{24}{section.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.1}Overview}{24}{subsection.7.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.2}Mathematical Foundation}{24}{subsection.7.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {7.2.1}Dahl's Method}{24}{subsubsection.7.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {7.2.2}MAP Estimation}{25}{subsubsection.7.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.3}Implementation}{25}{subsection.7.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {7.3.1}\texttt  {dahl\_partition()}}{25}{subsubsection.7.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {7.3.2}\texttt  {map\_partition()}}{26}{subsubsection.7.3.2}\protected@file@percent }
+\gdef \@abspage@last{26}

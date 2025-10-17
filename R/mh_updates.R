@@ -1,12 +1,31 @@
 
 # MCMC update steps ------------------------------------------------------
 
+#' Sum Log-Likelihoods Across Curves
+#'
+#' Computes the total log-likelihood across multiple curves using ICM cache.
+#'
+#' @param curves List of residual curve matrices
+#' @param cache ICM cache object
+#' @return Numeric total log-likelihood
 sum_ll_curves <- function(curves, cache) {
   s <- 0
   for (y in curves) s <- s + fast_icm_loglik_curve(y, cache)
   s
 }
 
+#' Update Kernel Parameters via Metropolis-Hastings
+#'
+#' Performs Metropolis-Hastings updates for kernel hyperparameters using eigendecomposition.
+#'
+#' @param k Integer cluster index
+#' @param params List of cluster parameters
+#' @param kernels List of kernel configurations
+#' @param t Numeric vector or matrix of input coordinates
+#' @param Y_list List of observed curve matrices
+#' @param a_eta Numeric shape parameter for eta prior
+#' @param b_eta Numeric rate parameter for eta prior
+#' @return Updated params list
 mh_update_kernel_eig <- function(k, params, kernels, t, Y_list, a_eta, b_eta) {
   kc <- kernels[[ params[[k]]$kern_idx ]]
   kp <- params[[k]]$thetas[[ params[[k]]$kern_idx ]]

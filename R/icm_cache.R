@@ -1,6 +1,40 @@
 
-# Fast ICM likelihood via block cache -----------------------------------
+# ICM likelihood via block cache -----------------------------------
 
+#' Build ICM Cache for Efficient Likelihood Computation
+#'
+#' Builds or updates a cache for efficient ICM likelihood computation using eigendecomposition
+#' and block diagonal structure. The cache stores precomputed eigendecompositions and
+#' Cholesky factors to avoid repeated computation during MCMC.
+#'
+#' @param t Matrix of input locations
+#' @param kern_cfg Kernel configuration list
+#' @param kp Kernel parameters
+#' @param L Lower triangular matrix for coregionalization
+#' @param eta Vector of channel-specific noise parameters
+#' @param tau_B Global scaling parameter
+#' @param cache Existing cache object (optional, for updates)
+#'
+#' @return Updated cache object containing:
+#'   \item{Ux_x}{Eigenvectors from kernel eigendecomposition}
+#'   \item{lam_x}{Eigenvalues from kernel eigendecomposition}
+#'   \item{Bshape}{Coregionalization matrix (unit trace)}
+#'   \item{chol_list}{List of Cholesky factors for each eigenvalue block}
+#'   \item{logdet_sum}{Sum of log determinants for likelihood computation}
+#'   \item{key_kx}{Cache key for kernel eigendecomposition}
+#'   \item{key_B}{Cache key for coregionalization matrix}
+#'
+#' @details The function implements: \eqn{\Sigma_j = \tau_B \lambda_j B + D_\eta},
+#' where \eqn{\lambda_j} are eigenvalues from kernel eigendecomposition, \eqn{B} is the coregionalization
+#' matrix, and \eqn{D_\eta} contains channel-specific noise. The cache is updated only when
+#' necessary based on parameter changes.
+#'
+#' @examples
+#' # Build initial cache
+#' cache <- .build_icm_cache(t, kern_cfg, kp, L, eta, tau_B)
+#' 
+#' # Update cache with new parameters
+#' cache <- .build_icm_cache(t, kern_cfg, new_kp, L, eta, tau_B, cache)
 .build_icm_cache <- function(t, kern_cfg, kp, L, eta, tau_B, cache = NULL) {
   key_kx <- paste(kern_cfg$name, paste(unlist(kp), collapse="|"), sep="::")
   key_B  <- paste(round(L,8), collapse="|")
@@ -54,6 +88,24 @@
   cache
 }
 
+#' ICM Likelihood Computation for Single Curve
+#'
+#' Computes the log-likelihood for a single curve using precomputed cache from
+#' .build_icm_cache(). Uses the block diagonal structure for efficient computation.
+#'
+#' @param y_resid Matrix of residuals (P x M) where P is number of time points and M is number of channels
+#' @param cache Cache object from .build_icm_cache() containing precomputed eigendecompositions and Cholesky factors
+#'
+#' @return Numeric scalar representing the log-likelihood value
+#'
+#' @details The function computes the log-likelihood using the formula:
+#' -0.5 * (P * M * log(2π) + logdet_sum + quadratic_form)
+#' where the quadratic form is computed efficiently using precomputed Cholesky factors
+#' for each eigenvalue block in the block diagonal structure.
+#'
+#' @examples
+#' # Assuming cache is built and y_resid is available
+#' loglik <- fast_icm_loglik_curve(y_resid, cache)
 fast_icm_loglik_curve <- function(y_resid, cache) {
   if (is.null(cache$Ux_x) || is.null(cache$chol_list))
     stop("Cache not built: missing Ux_x or chol_list.")

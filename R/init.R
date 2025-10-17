@@ -1,6 +1,13 @@
 
 # Initialization helpers -------------------------------------------------
 
+#' Create Empty Acceptance Tracking Structure
+#'
+#' Creates an empty structure for tracking MCMC acceptance rates.
+#'
+#' @param M Integer number of channels
+#' @param kernels List of kernel configurations
+#' @return List with acceptance tracking structure
 .draw_empty_acc <- function(M, kernels) {
   out <- list()
   out$kernel <- list()
@@ -12,6 +19,20 @@
   out
 }
 
+#' Draw New Cluster Parameters
+#'
+#' Initializes parameters for a new cluster in the WICMAD model.
+#'
+#' @param M Integer number of channels
+#' @param P Integer signal length
+#' @param t Numeric vector or matrix of input coordinates
+#' @param kernels List of kernel configurations
+#' @param wf Character string wavelet filter (default: "la8")
+#' @param J Integer number of decomposition levels (default: NULL)
+#' @param boundary Character string boundary condition (default: "periodic")
+#' @return List containing initialized cluster parameters
+#' @examples
+#' params <- draw_new_cluster_params(M=3, P=64, t=seq(0,1,length=64), kernels)
 draw_new_cluster_params <- function(M, P, t, kernels, wf="la8", J=NULL, boundary="periodic") {
   if (is.null(J)) J <- floor(log2(P))
   zeros <- matrix(0, nrow=P, ncol=M)
@@ -41,6 +62,16 @@ draw_new_cluster_params <- function(M, P, t, kernels, wf="la8", J=NULL, boundary
   )
 }
 
+#' Ensure Complete Cache for Cluster
+#'
+#' Ensures that a cluster has a complete and valid cache structure.
+#'
+#' @param params List of cluster parameters
+#' @param kernels List of kernel configurations
+#' @param k Integer cluster index
+#' @param t Numeric vector or matrix of input coordinates
+#' @param M Integer number of channels
+#' @return Updated params list with complete cache
 ensure_complete_cache <- function(params, kernels, k, t, M) {
   stopifnot(k >= 1L, k <= length(params))
   if (!is.numeric(params[[k]]$eta) || length(params[[k]]$eta) != M ||

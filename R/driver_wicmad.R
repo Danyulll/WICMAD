@@ -1,6 +1,83 @@
-#' WICMAD main model (DP–ICM–GP with Besov wavelet block)
-#' @param mean_intercept logical; if `TRUE` (default) include and sample a per-channel intercept
-#'   in each cluster while disabling bias-augmented kernel variants.
+#' WICMAD: Wavelet-ICM DP-GP Sampler with Diagnostics
+#'
+#' Main MCMC sampler for the WICMAD (Wavelet-ICM Anomaly Detector) model, implementing a Dirichlet Process
+#' mixture model for multivariate functional data with wavelet shrinkage and intrinsic
+#' coregionalization modeling.
+#'
+#' @param Y List of length N, where each element is a P×M matrix representing a multivariate
+#'   functional curve with P time points and M channels
+#' @param t Numeric vector of length P or P×d matrix of time coordinates
+#' @param n_iter Integer number of MCMC iterations (default: 6000)
+#' @param burn Integer number of burn-in iterations (default: 3000)
+#' @param thin Integer thinning interval for saved samples (default: 5)
+#' @param alpha_prior Numeric vector of length 2 giving shape and rate parameters for
+#'   the Gamma prior on the DP concentration parameter α (default: c(10, 1))
+#' @param wf Character string specifying wavelet family (default: "la8")
+#' @param J Integer number of wavelet decomposition levels or NULL for automatic
+#' @param boundary Character string specifying boundary condition (default: "periodic")
+#' @param mh_step_L Numeric proposal standard deviation for L matrix updates (default: 0.03)
+#' @param mh_step_eta Numeric proposal standard deviation for η updates (default: 0.10)
+#' @param mh_step_tauB Numeric proposal standard deviation for τ_B updates (default: 0.15)
+#' @param revealed_idx Integer vector of curve indices to pin to cluster 1 during warmup
+#' @param K_init Integer initial number of clusters (default: 5)
+#' @param warmup_iters Integer number of warmup iterations for revealed curves (default: 100)
+#' @param unpin Logical; if TRUE, release revealed curves after warmup (default: FALSE)
+#' @param kappa_pi Numeric sparsity parameter for Besov prior (default: 0.6)
+#' @param c2 Numeric decay parameter for level-specific sparsity (default: 1.0)
+#' @param tau_pi Numeric concentration parameter for Beta prior (default: 40)
+#' @param a_sig Numeric shape parameter for σ²_m prior (default: 2.5)
+#' @param b_sig Numeric rate parameter for σ²_m prior (default: 0.02)
+#' @param a_tau Numeric shape parameter for τ_σ prior (default: 2.0)
+#' @param b_tau Numeric rate parameter for τ_σ prior (default: 2.0)
+#' @param a_eta Numeric shape parameter for η prior (default: 2)
+#' @param b_eta Numeric rate parameter for η prior (default: 0.1)
+#' @param diagnostics Logical; if TRUE, collect diagnostic information (default: TRUE)
+#' @param track_ids Integer vector of curve indices to track in diagnostics
+#' @param monitor_levels Character vector of wavelet levels to monitor in diagnostics
+#' @param mean_intercept Logical; if TRUE, include per-channel intercept in each cluster
+#'   while disabling bias-augmented kernel variants (default: FALSE)
+#'
+#' @return List containing:
+#'   \item{Z}{Integer matrix of cluster assignments (S×N)}
+#'   \item{K_occ}{Integer vector of number of occupied clusters per iteration}
+#'   \item{loglik}{Numeric vector of log-likelihood values}
+#'   \item{diagnostics}{List of diagnostic information (if diagnostics=TRUE)}
+#'   \item{params}{List of cluster-specific parameters}
+#'   \item{meta}{List of metadata including dimensions and settings}
+#'
+#' @details The WICMAD model combines:
+#' \itemize{
+#'   \item \strong{Dirichlet Process clustering} for flexible number of clusters
+#'   \item \strong{Wavelet shrinkage} using Besov priors for sparsity
+#'   \item \strong{Intrinsic Coregionalization Model} for multivariate dependencies
+#'   \item \strong{Gaussian Process} kernels for temporal/spatial correlation
+#' }
+#'
+#' The MCMC algorithm includes:
+#' \itemize{
+#'   \item Cluster assignment updates using slice sampling for the Dirichlet Process
+#'   \item Wavelet coefficient updates with spike-and-slab priors
+#'   \item Kernel parameter updates via Metropolis-Hastings
+#'   \item ICM parameter updates for multivariate structure
+#' }
+#'
+#' @examples
+#' # Basic usage with synthetic data
+#' set.seed(123)
+#' N <- 20; P <- 64; M <- 2
+#' Y <- lapply(1:N, function(i) {
+#'   t <- seq(0, 1, length.out = P)
+#'   matrix(c(sin(2*pi*t) + rnorm(P, 0, 0.1),
+#'            cos(2*pi*t) + rnorm(P, 0, 0.1)), ncol = M)
+#' })
+#' t <- seq(0, 1, length.out = P)
+#' 
+#' # Run MCMC
+#' result <- wicmad(Y, t, n_iter = 1000, burn = 500, thin = 2)
+#' 
+#' # Extract cluster assignments
+#' cluster_assignments <- result$Z
+#' 
 #' @export
 wicmad <- function(
     Y, t,
@@ -11,15 +88,16 @@ wicmad <- function(
     revealed_idx = integer(0),
     K_init = 5,
     warmup_iters = 100,
-    unpin = TRUE,
+    unpin = FALSE,
     kappa_pi = 0.6, c2 = 1.0, tau_pi = 40,
     a_sig = 2.5, b_sig = 0.02, a_tau = 2.0, b_tau = 2.0,
     a_eta = 2, b_eta = 0.1,
     diagnostics = TRUE,
     track_ids = NULL,
     monitor_levels = NULL,
-    mean_intercept = TRUE
+    mean_intercept = FALSE
 ) {
+  # ===== PACKAGE LOADING =====
   suppressPackageStartupMessages({
     requireNamespace("waveslim")
     requireNamespace("mvtnorm")
@@ -27,7 +105,8 @@ wicmad <- function(
     requireNamespace("invgamma")
   })
   
-  # ---- Guards so we always have post-burn iterations and (if feasible) a saved draw
+  # ===== PARAMETER VALIDATION AND SETUP =====
+  # Guards so we always have post-burn iterations and (if feasible) a saved draw
   if (!is.numeric(n_iter) || n_iter < 2) stop("n_iter must be >= 2.")
   if (!is.numeric(thin) || thin < 1) thin <- 1L
   n_iter <- as.integer(n_iter); burn <- as.integer(burn); thin <- as.integer(thin)
@@ -42,9 +121,11 @@ wicmad <- function(
     thin <- new_thin
   }
   
+  # ===== DATA DIMENSIONS AND TIME NORMALIZATION =====
   N <- length(Y); P <- nrow(Y[[1]]); M <- ncol(Y[[1]]); J <- ensure_dyadic_J(P, J)
   t <- normalize_t(t, P); t <- scale_t01(t)
   
+  # ===== REVEALED CURVES HANDLING =====
   if (length(revealed_idx) > 0) {
     if (!unpin) {
       message(sprintf("Pinning %d revealed curves to cluster 1 for ALL %d iterations (unpin=FALSE).",
@@ -58,21 +139,25 @@ wicmad <- function(
     }
   }
   
+  # ===== INITIALIZATION: KERNELS, DP PARAMETERS, AND CLUSTERS =====
   kernels <- make_kernels(add_bias_variants = !isTRUE(mean_intercept))
   alpha <- rgamma(1, shape = alpha_prior[1], rate = alpha_prior[2])
   v     <- rbeta(K_init, 1, alpha)
   pi    <- stick_to_pi(v)
   K     <- length(v)
   
+  # ===== CLUSTER PARAMETER INITIALIZATION =====
   params <- vector("list", K)
   for (k in 1:K) {
     params[[k]] <- draw_new_cluster_params(M, P, t, kernels, wf, J, boundary)
     params <- ensure_complete_cache(params, kernels, k, t, M)
   }
   
+  # ===== INITIAL CLUSTER ASSIGNMENTS =====
   z <- sample.int(K, N, replace = TRUE)
   if (length(revealed_idx)) z[revealed_idx] <- 1L
   
+  # ===== OUTPUT STORAGE INITIALIZATION =====
   keep <- max(0L, floor((n_iter - burn) / thin))
   Z_s <- if (keep > 0) matrix(NA_integer_, keep, N) else matrix(NA_integer_, 0, N)
   alpha_s <- if (keep > 0) numeric(keep) else numeric(0)
@@ -80,6 +165,8 @@ wicmad <- function(
   K_s     <- if (keep > 0) integer(keep) else integer(0)
   loglik_s<- if (keep > 0) numeric(keep) else numeric(0)
   
+  # ===== HELPER FUNCTIONS =====
+  # Adjusted Rand Index - helper function for computing ARI between clusterings
   adj_rand_index <- function(z1, z2) {
     tab <- table(z1, z2)
     sum_comb <- sum(choose(tab, 2))
@@ -89,6 +176,7 @@ wicmad <- function(
     (sum_comb - (sum_a*sum_b)/tot) / (0.5*(sum_a+sum_b) - (sum_a*sum_b)/tot)
   }
 
+  # ===== DIAGNOSTICS INITIALIZATION =====
   diag <- NULL
   if (isTRUE(diagnostics)) {
     zeros <- matrix(0, P, M)
@@ -121,12 +209,15 @@ wicmad <- function(
   message(sprintf("Starting MCMC (N=%d, P=%d, M=%d, iters=%d; burn=%d, thin=%d, keep=%d)",
                   N, P, M, n_iter, burn, thin, keep))
   
+  # ===== BIAS AND MEAN FUNCTION HELPER FUNCTIONS =====
+  # Add bias terms to mean function - helper function
   add_bias_to_mu <- function(mu_wave, bias_vec) {
     if (!isTRUE(mean_intercept)) return(mu_wave)
     if (length(bias_vec) == 0) return(mu_wave)
     mu_wave + matrix(rep(bias_vec, each = nrow(mu_wave)), nrow(mu_wave), length(bias_vec))
   }
 
+  # Convert bias terms to wavelet coefficients - helper function
   bias_to_wavelet <- function(bias_vec) {
     if (!isTRUE(mean_intercept)) return(NULL)
     if (length(bias_vec) == 0L) return(NULL)
@@ -136,6 +227,7 @@ wicmad <- function(
     lapply(fw, function(comp) comp$coeff)
   }
 
+  # Compute log-likelihood for curve in cluster - helper function
   ll_curve_k <- function(k, Yi, mu_k) {
     kc <- kernels[[ params[[k]]$kern_idx ]]
     kp <- params[[k]]$thetas[[ params[[k]]$kern_idx ]]
@@ -145,6 +237,7 @@ wicmad <- function(
     fast_icm_loglik_curve(y_resid, cache)
   }
 
+  # Sample channel-specific bias terms - helper function
   sample_bias <- function(k, idx, mu_wave) {
     if (!isTRUE(mean_intercept) || length(idx) == 0L) return(params[[k]]$bias)
     bias_cur <- params[[k]]$bias
@@ -169,14 +262,17 @@ wicmad <- function(
     bias_cur
   }
   
-  # ---- Record K_occ every iteration to make progress averaging bulletproof
+  # ===== MAIN MCMC LOOP =====
+  # Record K_occ every iteration to make progress averaging bulletproof
   K_hist <- rep(NA_real_, n_iter)
   
   for (iter in 1:n_iter) {
+    # ===== ITERATION START: WARMUP HANDLING =====
     if (iter == warmup_iters + 1 && length(revealed_idx) && warmup_iters > 0 && unpin) {
       message("Warm-up ended: released revealed curves for regular DP assignments.")
     }
     
+    # ===== SLICE SAMPLING: STICK-BREAKING AND CLUSTER EXPANSION =====
     # Walker/Kalli slice expansion
     pi <- stick_to_pi(v)
     u  <- sapply(1:N, function(i) runif(1, 0, pi[z[i]]))
@@ -190,6 +286,7 @@ wicmad <- function(
       params <- ensure_complete_cache(params, kernels, k_new, t, M)
     }
     
+    # ===== CLUSTER ASSIGNMENT FUNCTION =====
     assign_one <- function(i) {
       if (length(revealed_idx) && (i %in% revealed_idx) &&
           ( !unpin || (warmup_iters > 0 && iter <= warmup_iters) )) {
@@ -215,22 +312,27 @@ wicmad <- function(
       S[sample.int(length(S), 1, prob = w)]
     }
     
+    # ===== CLUSTER ASSIGNMENT UPDATES =====
     for (kk in seq_along(params)) params <- ensure_complete_cache(params, kernels, kk, t, M)
     if (isTRUE(diagnostics)) z_prev <- z
 
     for (i in 1:N) z[i] <- assign_one(i)
     
+    # ===== STICK-BREAKING PARAMETER UPDATES =====
     v  <- update_v_given_z(v, z, alpha)
     pi <- stick_to_pi(v)
     K  <- length(v)
     
+    # ===== CLUSTER-SPECIFIC UPDATES =====
     for (k in 1:K) {
       idx <- which(z == k)
       if (!length(idx)) next
+      # ===== BIAS TERM SAMPLING (if mean_intercept=TRUE) =====
       if (isTRUE(mean_intercept)) {
         mu_wave_cur <- compute_mu_from_beta(params[[k]]$beta_ch, wf, J, boundary, P)
         params[[k]]$bias <- sample_bias(k, idx, mu_wave_cur)
       }
+      # ===== WAVELET BLOCK UPDATES (BESOV PRIORS) =====
       bias_coeff <- if (isTRUE(mean_intercept)) bias_to_wavelet(params[[k]]$bias) else NULL
       upd <- update_cluster_wavelet_params_besov(
         idx = idx, precomp = precomp_all, M = M,
@@ -247,6 +349,7 @@ wicmad <- function(
       params[[k]]$sigma2     <- upd$sigma2_m
       params[[k]]$tau_sigma  <- upd$tau_sigma
 
+      # ===== MEAN FUNCTION RECOMPUTATION AND CACHING =====
       mu_wave <- compute_mu_from_beta(params[[k]]$beta_ch, wf, J, boundary, P)
       if (isTRUE(mean_intercept)) {
         params[[k]]$bias <- sample_bias(k, idx, mu_wave)
@@ -255,15 +358,17 @@ wicmad <- function(
       params[[k]]$mu_cached      <- as_num_mat(mu_k)
       params[[k]]$mu_cached_iter <- iter
 
+      # ===== KERNEL AND ICM UPDATES =====
       Yk <- lapply(idx, function(ii) Y[[ii]])
-      params <- cc_switch_kernel_eig(k, params, kernels, t, Yk)
-      params <- mh_update_kernel_eig(k, params, kernels, t, Yk, a_eta, b_eta)
-      params <- mh_update_L_eig(     k, params, kernels, t, Yk, mh_step_L)
-      params <- mh_update_eta_eig(   k, params, kernels, t, Yk, mh_step_eta, a_eta, b_eta)
-      params <- mh_update_tauB_eig(  k, params, kernels, t, Yk, mh_step_tauB)
+      params <- cc_switch_kernel_eig(k, params, kernels, t, Yk)  # Carlin-Chib kernel swapping
+      params <- mh_update_kernel_eig(k, params, kernels, t, Yk, a_eta, b_eta)  # Kernel parameters
+      params <- mh_update_L_eig(     k, params, kernels, t, Yk, mh_step_L)      # L matrix
+      params <- mh_update_eta_eig(   k, params, kernels, t, Yk, mh_step_eta, a_eta, b_eta)  # eta vector
+      params <- mh_update_tauB_eig(  k, params, kernels, t, Yk, mh_step_tauB)  # tau_B scalar
     }
     
-    # ---- Occupied clusters this iteration; record to K_hist *every* iter
+    # ===== DIAGNOSTICS AND TRACKING =====
+    # Occupied clusters this iteration; record to K_hist *every* iter
     Kocc <- length(unique(z))
     if (isTRUE(diagnostics)) {
       diag$ari_all[iter] <- adj_rand_index(z_prev, z)
@@ -271,7 +376,8 @@ wicmad <- function(
     }
     K_hist[iter] <- as.numeric(Kocc)
     
-    # ---- Escobar–West update for alpha
+    # ===== DP CONCENTRATION PARAMETER UPDATE (ESCÓBAR-WEST) =====
+    # Escobar–West update for alpha
     eta_aux <- rbeta(1, alpha + 1, N)
     mix <- (alpha_prior[1] + Kocc - 1) /
       (N * (alpha_prior[2] - log(eta_aux)) + alpha_prior[1] + Kocc - 1)
@@ -281,7 +387,8 @@ wicmad <- function(
       alpha <- rgamma(1, alpha_prior[1] + Kocc - 1, alpha_prior[2] - log(eta_aux))
     }
     
-    # ---- Save draw (if any)
+    # ===== SAMPLE STORAGE (POST-BURN) =====
+    # Save draw (if any)
     if (keep > 0 && iter > burn && ((iter - burn) %% thin == 0)) {
       sidx <- sidx + 1L
       Z_s[sidx, ] <- z
@@ -340,7 +447,8 @@ wicmad <- function(
       }
     }
     
-    # ---- Progress line (robust; never "-" after burn)
+    # ===== PROGRESS REPORTING =====
+    # Progress line (robust; never "-" after burn)
     if (iter %% 10 == 0) {
       avg_saved <- if (keep > 0 && sidx > 0) mean(K_s[seq_len(sidx)], na.rm = TRUE) else NA_real_
       avg_iter  <- if (iter > burn) mean(K_hist[(burn + 1):iter], na.rm = TRUE) else NA_real_
@@ -358,16 +466,19 @@ wicmad <- function(
       flush.console()
     }
   }
+  # ===== MCMC LOOP COMPLETE =====
   cat("\nDone.\n")
   
-  # ---- ARI across consecutive saved draws (if any)
+  # ===== POST-PROCESSING: ARI COMPUTATION =====
+  # ARI across consecutive saved draws (if any)
   if (isTRUE(diagnostics) && keep >= 2) {
     for (s in 2:keep) {
       diag$ari[s-1] <- adj_rand_index(Z_s[s-1,], Z_s[s,])
     }
   }
   
-  # ---- Final summaries
+  # ===== FINAL SUMMARIES AND OUTPUT =====
+  # Final summaries
   if (keep > 0 && length(K_s) > 0 && any(is.finite(K_s))) {
     cat(sprintf("Post-burn avg K (saved draws): %.3f\n", mean(K_s[is.finite(K_s)])))
   } else {
@@ -378,6 +489,7 @@ wicmad <- function(
                 mean(K_hist[(burn+1):n_iter], na.rm = TRUE)))
   }
   
+  # ===== RETURN RESULTS =====
   list(
     Z = Z_s, alpha = alpha_s, kern = kern_s,
     params = params, v = v, pi = stick_to_pi(v),

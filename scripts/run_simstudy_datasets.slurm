@@ -36,3 +36,4 @@ echo "Host: $(hostname)"
 srun Rscript run_simstudy_datasets.R
 
 echo "Finished at: $(date)"
+
