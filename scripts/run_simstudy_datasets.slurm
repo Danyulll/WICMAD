@@ -1,10 +1,10 @@
 #!/bin/bash
-#SBATCH --job-name=simstudy-wicmad
+#SBATCH --job-name=simstudy-wicmad_mc
 #SBATCH --account=def-dsteph
 #SBATCH --time=7-00:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=45
+#SBATCH --cpus-per-task=100
 #SBATCH --mem=160G
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=daniel.krasnov@mail.mcgill.ca
@@ -33,7 +33,6 @@ echo "Starting at: $(date)"
 echo "Host: $(hostname)"
 
 # --- Run your simulation ---
-srun Rscript run_simstudy_datasets.R
+srun Rscript simstudy.R
 
 echo "Finished at: $(date)"
-
