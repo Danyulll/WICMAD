@@ -172,7 +172,7 @@ load_basicmotions_data <- function(data_dir, reveal_ratio = 0.15) {
 }
 
 # Function to interpolate time series to target dimension
-interpolate_series <- function(series, target_dim = 16) {
+interpolate_series <- function(series, target_dim = 64) {
   n <- nrow(series)
   if (n == target_dim) {
     return(series)
@@ -197,17 +197,17 @@ prepare_wicmad_data <- function(series_list, labels) {
   
   n_series <- length(series_list)
   
-  # Interpolate each series to 16 dimensions
+  # Interpolate each series to 64 dimensions (nearest power of 2 to 100)
   interpolated_series <- list()
   for (i in seq_len(n_series)) {
-    interpolated_series[[i]] <- interpolate_series(series_list[[i]], 16)
+    interpolated_series[[i]] <- interpolate_series(series_list[[i]], 64)
   }
   
   # Create time coordinates
-  t <- seq(0, 1, length.out = 16)
+  t <- seq(0, 1, length.out = 64)
   
   # Convert to list format for WICMAD (each element is a PxM matrix)
-  # P=16 (time points), M=6 (dimensions)
+  # P=64 (time points), M=6 (dimensions)
   Y <- interpolated_series
   
   return(list(Y = Y, t = t, labels = labels))
@@ -298,7 +298,8 @@ plot_overlapped_data <- function(series_list, labels, title = "BasicMotions Data
         dimension = paste("Dim", j),
         series_id = i,
         label = labels[i],
-        label_name = paste("Class", labels[i])
+        label_name = paste("Class", labels[i]),
+        row.names = NULL
       )
       
       plot_data <- rbind(plot_data, series_df)
@@ -344,7 +345,8 @@ plot_clustering_results <- function(series_list, true_labels, cluster_assignment
         series_id = i,
         true_label = true_labels[i],
         cluster = cluster_assignments[i],
-        true_label_name = paste("Class", true_labels[i])
+        true_label_name = paste("Class", true_labels[i]),
+        row.names = NULL
       )
       
       plot_data <- rbind(plot_data, series_df)
