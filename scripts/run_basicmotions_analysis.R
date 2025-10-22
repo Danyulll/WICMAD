@@ -8,7 +8,7 @@ library(ggplot2)
 library(dplyr)
 library(tidyr)
 library(cluster)
-library(caret)
+# library(caret)
 library(mclust)  # For adjustedRandIndex
 
 # Load WICMAD package
