@@ -626,7 +626,7 @@ main <- function() {
   cat("=== Coffee Dataset Analysis with WICMAD ===\n\n")
   
   # Set data directory
-  data_dir <- "data/Coffee"
+  data_dir <- "../data/Coffee"
   
   # Load data with 5% anomaly class
   cat("1. Loading coffee dataset with 5% anomaly class...\n")

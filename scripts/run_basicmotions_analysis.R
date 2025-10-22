@@ -370,7 +370,7 @@ main <- function() {
   cat("=== BasicMotions Dataset Analysis with WICMAD ===\n\n")
   
   # Set data directory
-  data_dir <- "data/BasicMotions"
+  data_dir <- "../data/BasicMotions"
   
   # Load data
   cat("1. Loading BasicMotions dataset...\n")

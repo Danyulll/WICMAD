@@ -425,7 +425,7 @@ main <- function() {
   cat("=== PTB Dataset Analysis with WICMAD ===\n")
   
   # Set data directory
-  data_dir <- "data/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3"
+  data_dir <- "../data/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3"
   
   # Load data
   cat("1. Loading PTB dataset...\n")
