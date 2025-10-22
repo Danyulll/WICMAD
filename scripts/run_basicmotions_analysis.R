@@ -388,10 +388,10 @@ main <- function() {
                                        "BasicMotions Dataset - Original Multivariate Time Series")
   
   # Save original data plot
-  pdf("basicmotions_original_data.pdf", width = 12, height = 10)
+  pdf("plots/basicmotions_original_data.pdf", width = 12, height = 10)
   print(original_plot)
   dev.off()
-  cat("Original data plot saved to basicmotions_original_data.pdf\n")
+  cat("Original data plot saved to plots/basicmotions_original_data.pdf\n")
   
   # Prepare data for WICMAD
   cat("\n3. Preparing data for WICMAD...\n")
@@ -450,16 +450,16 @@ main <- function() {
   )
   
   # Save clustering results plot
-  pdf("basicmotions_clustering_results.pdf", width = 12, height = 10)
+  pdf("plots/basicmotions_clustering_results.pdf", width = 12, height = 10)
   print(clustering_plot)
   dev.off()
-  cat("Clustering results plot saved to basicmotions_clustering_results.pdf\n")
+  cat("Clustering results plot saved to plots/basicmotions_clustering_results.pdf\n")
   
   # Print final summary
   cat("\n=== Analysis Complete ===\n")
   cat("Generated files:\n")
-  cat("- basicmotions_original_data.pdf: Original multivariate time series (overlapped)\n")
-  cat("- basicmotions_clustering_results.pdf: Clustered multivariate time series\n")
+  cat("- plots/basicmotions_original_data.pdf: Original multivariate time series (overlapped)\n")
+  cat("- plots/basicmotions_clustering_results.pdf: Clustered multivariate time series\n")
   
   cat("\nFinal Performance:\n")
   cat("Macro Precision:", round(metrics$Macro_Precision, 4), "\n")

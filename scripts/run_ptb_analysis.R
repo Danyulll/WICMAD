@@ -467,10 +467,10 @@ main <- function() {
                                        "PTB Dataset - Original ECG Data (Subsample)")
   
   # Save original data plot
-  pdf("ptb_original_data.pdf", width = 12, height = 10)
+  pdf("plots/ptb_original_data.pdf", width = 12, height = 10)
   print(original_plot)
   dev.off()
-  cat("Original data plot saved to ptb_original_data.pdf\n")
+  cat("Original data plot saved to plots/ptb_original_data.pdf\n")
   
   # Prepare data for WICMAD
   cat("\n3. Preparing data for WICMAD...\n")
@@ -535,15 +535,15 @@ main <- function() {
   )
   
   # Save clustering results plot
-  pdf("ptb_clustering_results.pdf", width = 12, height = 10)
+  pdf("plots/ptb_clustering_results.pdf", width = 12, height = 10)
   print(clustering_plot)
   dev.off()
-  cat("Clustering results plot saved to ptb_clustering_results.pdf\n")
+  cat("Clustering results plot saved to plots/ptb_clustering_results.pdf\n")
   
   cat("\n=== Analysis Complete ===\n")
   cat("Generated files:\n")
-  cat("- ptb_original_data.pdf: Original ECG data (overlapped)\n")
-  cat("- ptb_clustering_results.pdf: Clustered ECG data\n")
+  cat("- plots/ptb_original_data.pdf: Original ECG data (overlapped)\n")
+  cat("- plots/ptb_clustering_results.pdf: Clustered ECG data\n")
   cat("\nFinal Performance:\n")
   cat("Macro Precision:", round(metrics$Macro_Precision, 4), "\n")
   cat("Macro Recall:", round(metrics$Macro_Recall, 4), "\n")

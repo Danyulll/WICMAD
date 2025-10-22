@@ -644,10 +644,10 @@ main <- function() {
                                        "Coffee Dataset - Imbalanced (5% Anomaly)")
   
   # Save original data plot
-  pdf("coffee_imbalanced_original_data.pdf", width = 12, height = 8)
+  pdf("plots/coffee_imbalanced_original_data.pdf", width = 12, height = 8)
   print(original_plot)
   dev.off()
-  cat("Imbalanced original data plot saved to coffee_imbalanced_original_data.pdf\n")
+  cat("Imbalanced original data plot saved to plots/coffee_imbalanced_original_data.pdf\n")
   
   # Run analysis on raw signal
   cat("\n3. Analyzing raw signal data...\n")
@@ -666,10 +666,10 @@ main <- function() {
     "Raw Signal - Clustering Results"
   )
   
-  pdf("coffee_raw_signal_clustering.pdf", width = 12, height = 8)
+  pdf("plots/coffee_raw_signal_clustering.pdf", width = 12, height = 8)
   print(raw_clustering_plot)
   dev.off()
-  cat("Raw signal clustering plot saved to coffee_raw_signal_clustering.pdf\n")
+  cat("Raw signal clustering plot saved to plots/coffee_raw_signal_clustering.pdf\n")
   
   # Run analysis on derivatives
   cat("\n4. Analyzing derivative data...\n")
@@ -691,10 +691,10 @@ main <- function() {
     "Derivatives - Clustering Results"
   )
   
-  pdf("coffee_derivatives_clustering.pdf", width = 12, height = 8)
+  pdf("plots/coffee_derivatives_clustering.pdf", width = 12, height = 8)
   print(deriv_clustering_plot)
   dev.off()
-  cat("Derivatives clustering plot saved to coffee_derivatives_clustering.pdf\n")
+  cat("Derivatives clustering plot saved to plots/coffee_derivatives_clustering.pdf\n")
   
   # Run analysis on FPCA data
   cat("\n5. Analyzing FPCA data...\n")
@@ -715,18 +715,18 @@ main <- function() {
     "FPCA - Clustering Results"
   )
   
-  pdf("coffee_fpca_clustering.pdf", width = 12, height = 8)
+  pdf("plots/coffee_fpca_clustering.pdf", width = 12, height = 8)
   print(fpca_clustering_plot)
   dev.off()
-  cat("FPCA clustering plot saved to coffee_fpca_clustering.pdf\n")
+  cat("FPCA clustering plot saved to plots/coffee_fpca_clustering.pdf\n")
   
   # Print final summary
   cat("\n=== Imbalanced Analysis Complete ===\n")
   cat("Generated files:\n")
-  cat("- coffee_imbalanced_original_data.pdf: Imbalanced time series (5% anomaly, overlapped)\n")
-  cat("- coffee_raw_signal_clustering.pdf: Raw signal clustering results\n")
-  cat("- coffee_derivatives_clustering.pdf: Derivatives clustering results\n")
-  cat("- coffee_fpca_clustering.pdf: FPCA clustering results\n")
+  cat("- plots/coffee_imbalanced_original_data.pdf: Imbalanced time series (5% anomaly, overlapped)\n")
+  cat("- plots/coffee_raw_signal_clustering.pdf: Raw signal clustering results\n")
+  cat("- plots/coffee_derivatives_clustering.pdf: Derivatives clustering results\n")
+  cat("- plots/coffee_fpca_clustering.pdf: FPCA clustering results\n")
   
   cat("\nPerformance Comparison:\n")
   cat("Raw Signal - Precision:", round(raw_results$metrics$Macro_Precision, 4), 
