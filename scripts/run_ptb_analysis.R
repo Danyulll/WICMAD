@@ -258,17 +258,17 @@ prepare_wicmad_data <- function(series_list, labels) {
   
   n_series <- length(series_list)
   
-  # Interpolate each series to 16 dimensions (for testing)
+  # Interpolate each series to 128 dimensions (highest power of 2)
   interpolated_series <- list()
   for (i in seq_len(n_series)) {
-    interpolated_series[[i]] <- interpolate_series(series_list[[i]], 16)
+    interpolated_series[[i]] <- interpolate_series(series_list[[i]], 128)
   }
   
   # Create time coordinates
-  t <- seq(0, 1, length.out = 16)
+  t <- seq(0, 1, length.out = 128)
   
   # Convert to list format for WICMAD (each element is a PxM matrix)
-  # P=16 (time points), M=12 (ECG leads)
+  # P=128 (time points), M=12 (ECG leads)
   Y <- interpolated_series
   
   return(list(Y = Y, t = t, labels = labels))
