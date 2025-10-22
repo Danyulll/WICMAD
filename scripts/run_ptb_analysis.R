@@ -13,7 +13,7 @@ library(mclust)  # For adjustedRandIndex
 
 # Load WICMAD package
 library(devtools)
-devtools::install()
+devtools::load_all()
 
 # Function to load PTB dataset with imbalanced sampling
 load_ptb_data <- function(data_dir, reveal_ratio = 0.15) {

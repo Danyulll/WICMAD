@@ -14,7 +14,7 @@ library(mclust)  # For adjustedRandIndex
 
 # Load WICMAD package
 library(devtools)
-devtools::install()
+devtools::load_all()
 
 # Function to load coffee dataset and create imbalanced data
 load_coffee_data <- function(data_dir, imbalance_ratio = 0.05) {
