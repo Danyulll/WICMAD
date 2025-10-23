@@ -208,8 +208,8 @@ run_wicmad_analysis <- function(wicmad_data, analysis_name) {
     t = wicmad_data$t,
     n_iter = 8000,
     burn = 3000,
-    warmup = 500,
-    pinned_normal = TRUE
+    warmup_iters = 500,
+    unpin = FALSE
   )
   
   # Extract cluster assignments

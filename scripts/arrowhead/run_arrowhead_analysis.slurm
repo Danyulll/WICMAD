@@ -10,7 +10,6 @@
 #SBATCH --mail-user=daniel.krasnov@mail.mcgill.ca
 
 # --- Modules: match the versions you used to install packages on the login node ---
-module purge
 module load r/4.5.0
 
 # --- Use the same user library you installed into on the login node ---

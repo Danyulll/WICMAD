@@ -119,27 +119,26 @@ load_arrowhead_data <- function(data_dir) {
   # Convert to anomaly detection format (majority class = normal, others = anomaly)
   anomaly_labels <- ifelse(all_labels == majority_class, 0, 1)
   
-  # Create imbalanced dataset with 5% anomalies
+  # Create imbalanced dataset with approximately 5% anomalies
   normal_indices <- which(anomaly_labels == 0)
   anomaly_indices <- which(anomaly_labels == 1)
   
-  # Calculate how many anomalies we need for 5% of total
-  total_samples <- length(all_series)
-  n_anomalies_needed <- max(1, round(total_samples * 0.05))
-  n_normal_needed <- total_samples - n_anomalies_needed
+  # Use all available normal samples
+  selected_normal <- normal_indices
+  n_normal_used <- length(selected_normal)
   
-  # Sample the required number of normal and anomaly samples
-  if (length(normal_indices) >= n_normal_needed) {
-    selected_normal <- sample(normal_indices, n_normal_needed)
-  } else {
-    selected_normal <- normal_indices
-  }
+  # Calculate how many anomalies we need for 5% of the total dataset
+  # Total dataset will be: n_normal_used + n_anomalies_needed
+  # We want: n_anomalies_needed / (n_normal_used + n_anomalies_needed) = 0.05
+  # Solving: n_anomalies_needed = 0.05 * (n_normal_used + n_anomalies_needed)
+  # n_anomalies_needed = 0.05 * n_normal_used / (1 - 0.05) = 0.05 * n_normal_used / 0.95
+  n_anomalies_needed <- max(1, round(0.05 * n_normal_used / 0.95))
   
-  if (length(anomaly_indices) >= n_anomalies_needed) {
-    selected_anomaly <- sample(anomaly_indices, n_anomalies_needed)
-  } else {
-    selected_anomaly <- anomaly_indices
-  }
+  # Ensure we don't exceed available anomaly samples
+  n_anomalies_needed <- min(n_anomalies_needed, length(anomaly_indices))
+  
+  # Sample the required number of anomaly samples
+  selected_anomaly <- sample(anomaly_indices, n_anomalies_needed)
   
   # Combine selected indices
   selected_indices <- c(selected_normal, selected_anomaly)
@@ -158,6 +157,9 @@ load_arrowhead_data <- function(data_dir) {
   cat("Normal (Class", majority_class, "):", sum(imbalanced_labels == 0), "\n")
   cat("Anomaly (Classes", paste(minority_classes, collapse = ", "), "):", sum(imbalanced_labels == 1), "\n")
   cat("Anomaly percentage:", round(mean(imbalanced_labels == 1) * 100, 1), "%\n")
+  cat("Target anomaly percentage: 5.0%\n")
+  cat("Available normal samples used:", n_normal_used, "\n")
+  cat("Available anomaly samples used:", n_anomalies_needed, "out of", length(anomaly_indices), "\n")
   
   return(list(
     train_series = imbalanced_series,
@@ -352,7 +354,7 @@ calculate_clustering_metrics <- function(true_labels, pred_labels) {
 }
 
 # Function to plot overlapped data
-plot_overlapped_data <- function(series_list, labels, title = "ArrowHead Dataset", max_series = NULL) {
+plot_overlapped_data <- function(series_list, labels, title = "ArrowHead - Before Clustering", max_series = NULL) {
   cat("Creating overlapped data plot...\n")
   
   # Use all series if max_series is NULL
@@ -394,7 +396,7 @@ plot_overlapped_data <- function(series_list, labels, title = "ArrowHead Dataset
 }
 
 # Function to plot clustering results
-plot_clustering_results <- function(series_list, true_labels, cluster_assignments, title = "ArrowHead - Clustering Results", max_series = NULL) {
+plot_clustering_results <- function(series_list, true_labels, cluster_assignments, title = "ArrowHead - After Clustering", max_series = NULL) {
   cat("Creating clustering results plot...\n")
   
   # Use all series if max_series is NULL
@@ -437,7 +439,7 @@ plot_clustering_results <- function(series_list, true_labels, cluster_assignment
 }
 
 # Function to plot derivative clustering results (3 separate channels)
-plot_derivative_clustering_results <- function(original_data, first_deriv_data, second_deriv_data, cluster_assignments, title = "ArrowHead - After Clustering", max_series = NULL) {
+plot_derivative_clustering_results <- function(original_data, first_deriv_data, second_deriv_data, cluster_assignments, title = "ArrowHead - After Clustering (Derivatives)", max_series = NULL) {
   cat("Creating derivative clustering results plot...\n")
   
   # Use all series if max_series is NULL
@@ -505,14 +507,14 @@ main <- function() {
   cat("=== ArrowHead Dataset Analysis with WICMAD ===\n\n")
   
   # Ensure output directory exists
-  output_dir <- "../plots/arrowhead"
+  output_dir <- "./plots/arrowhead"
   if (!dir.exists(output_dir)) {
     dir.create(output_dir, recursive = TRUE)
     cat("Created output directory:", output_dir, "\n")
   }
   
   # Set data directory
-  data_dir <- "../data/ArrowHead"
+  data_dir <- "./data/ArrowHead"
   
   # Load data
   cat("1. Loading ArrowHead dataset...\n")
@@ -533,11 +535,11 @@ main <- function() {
   cat("Number of labels:", length(data$train_labels), "\n")
   
   original_plot <- plot_overlapped_data(data$train_series, data$train_labels, 
-                                       "ArrowHead Dataset - Original Time Series")
+                                       "ArrowHead Dataset - Before Clustering")
   cat("Plot object created successfully\n")
   
   # Save original data plot
-  plot_path <- "../plots/arrowhead/arrowhead_original_data.pdf"
+  plot_path <- "./plots/arrowhead/arrowhead_original_data.pdf"
   cat("Attempting to save plot to:", plot_path, "\n")
   cat("Current working directory:", getwd(), "\n")
   
@@ -567,8 +569,8 @@ main <- function() {
     t = wicmad_data$t,
     n_iter = 8000,
     burn = 3000,
-    warmup = 500,
-    pinned_normal = TRUE
+    warmup_iters = 500,
+    unpin = FALSE
   )
   
   # Extract cluster assignments
@@ -621,11 +623,11 @@ main <- function() {
     data$train_series, 
     wicmad_data$labels, 
     binary_cluster_assignments,
-    "ArrowHead - Clustering Results"
+    "ArrowHead - After Clustering"
   )
   
   # Save clustering results plot
-  clustering_plot_path <- "../plots/arrowhead/arrowhead_clustering_results.pdf"
+  clustering_plot_path <- "./plots/arrowhead/arrowhead_clustering_results.pdf"
   cat("Attempting to save clustering plot to:", clustering_plot_path, "\n")
   
   pdf(clustering_plot_path, width = 12, height = 8)
@@ -654,8 +656,8 @@ main <- function() {
     t = deriv_wicmad_data$t,
     n_iter = 8000,
     burn = 3000,
-    warmup = 500,
-    pinned_normal = TRUE
+    warmup_iters = 500,
+    unpin = FALSE
   )
   
   # Extract cluster assignments
@@ -701,11 +703,11 @@ main <- function() {
     deriv_wicmad_data$first_deriv_data,
     deriv_wicmad_data$second_deriv_data,
     deriv_binary_cluster_assignments,
-    "ArrowHead - After Clustering"
+    "ArrowHead - After Clustering (Derivatives)"
   )
   
   # Save derivative clustering results plot
-  deriv_clustering_plot_path <- "../plots/arrowhead/arrowhead_derivatives_clustering.pdf"
+  deriv_clustering_plot_path <- "./plots/arrowhead/arrowhead_derivatives_clustering.pdf"
   cat("Attempting to save derivative clustering plot to:", deriv_clustering_plot_path, "\n")
   
   pdf(deriv_clustering_plot_path, width = 12, height = 8)
@@ -722,9 +724,9 @@ main <- function() {
   # Print final summary
   cat("\n=== Analysis Complete ===\n")
   cat("Generated files:\n")
-  cat("- ../plots/arrowhead/arrowhead_original_data.pdf: Original time series (overlapped)\n")
-  cat("- ../plots/arrowhead/arrowhead_clustering_results.pdf: Clustered time series\n")
-  cat("- ../plots/arrowhead/arrowhead_derivatives_clustering.pdf: Derivative clustering results\n")
+  cat("- ./plots/arrowhead/arrowhead_original_data.pdf: Original time series (overlapped)\n")
+  cat("- ./plots/arrowhead/arrowhead_clustering_results.pdf: Clustered time series\n")
+  cat("- ./plots/arrowhead/arrowhead_derivatives_clustering.pdf: Derivative clustering results\n")
   
   cat("\nPerformance Comparison:\n")
   cat("Raw Signal - Precision:", round(metrics$Macro_Precision, 4), 
