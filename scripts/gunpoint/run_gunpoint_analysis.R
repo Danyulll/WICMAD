@@ -57,27 +57,26 @@ load_gunpoint_data <- function(data_dir) {
   cat("Binary labels (0=Gun-Draw/Normal, 1=Point/Anomaly):\n")
   print(table(binary_labels))
   
-  # Create imbalanced dataset with 5% anomalies
+  # Create imbalanced dataset with approximately 5% anomalies
   normal_indices <- which(binary_labels == 0)
   anomaly_indices <- which(binary_labels == 1)
   
-  # Calculate how many anomalies we need for 5% of total
-  total_samples <- length(binary_labels)
-  n_anomalies_needed <- max(1, round(total_samples * 0.05))
-  n_normal_needed <- total_samples - n_anomalies_needed
+  # Use all available normal samples
+  selected_normal <- normal_indices
+  n_normal_used <- length(selected_normal)
   
-  # Sample the required number of normal and anomaly samples
-  if (length(normal_indices) >= n_normal_needed) {
-    selected_normal <- sample(normal_indices, n_normal_needed)
-  } else {
-    selected_normal <- normal_indices
-  }
+  # Calculate how many anomalies we need for 5% of the total dataset
+  # Total dataset will be: n_normal_used + n_anomalies_needed
+  # We want: n_anomalies_needed / (n_normal_used + n_anomalies_needed) = 0.05
+  # Solving: n_anomalies_needed = 0.05 * (n_normal_used + n_anomalies_needed)
+  # n_anomalies_needed = 0.05 * n_normal_used / (1 - 0.05) = 0.05 * n_normal_used / 0.95
+  n_anomalies_needed <- max(1, round(0.05 * n_normal_used / 0.95))
   
-  if (length(anomaly_indices) >= n_anomalies_needed) {
-    selected_anomaly <- sample(anomaly_indices, n_anomalies_needed)
-  } else {
-    selected_anomaly <- anomaly_indices
-  }
+  # Ensure we don't exceed available anomaly samples
+  n_anomalies_needed <- min(n_anomalies_needed, length(anomaly_indices))
+  
+  # Sample the required number of anomaly samples
+  selected_anomaly <- sample(anomaly_indices, n_anomalies_needed)
   
   # Combine selected indices
   selected_indices <- c(selected_normal, selected_anomaly)
@@ -96,10 +95,14 @@ load_gunpoint_data <- function(data_dir) {
   cat("Normal (Gun-Draw):", sum(imbalanced_labels == 0), "\n")
   cat("Anomaly (Point):", sum(imbalanced_labels == 1), "\n")
   cat("Anomaly percentage:", round(mean(imbalanced_labels == 1) * 100, 1), "%\n")
+  cat("Target anomaly percentage: 5.0%\n")
+  cat("Available normal samples used:", n_normal_used, "\n")
+  cat("Available anomaly samples used:", n_anomalies_needed, "out of", length(anomaly_indices), "\n")
   
-  # Set target dimension to 16 for testing
-  target_dim <- 16
-  cat("Using target dimension for testing:", target_dim, "\n")
+  # Find the highest power of 2 supported by the data
+  max_dim <- ncol(imbalanced_time_series)
+  target_dim <- 2^floor(log2(max_dim))
+  cat("Using p parameter (highest power of 2):", target_dim, "\n")
   
   return(list(
     train_data = imbalanced_time_series,
@@ -502,7 +505,7 @@ main <- function() {
   
   # Load data
   cat("\n1. Loading GunPoint dataset...\n")
-  data <- load_gunpoint_data("../data/GunPoint")
+  data <- load_gunpoint_data("../../data/GunPoint")
   
   cat("Label distribution:\n")
   print(table(data$train_labels))
@@ -515,14 +518,14 @@ main <- function() {
                                        "GunPoint Dataset - Before Clustering")
   
   # Save original data plot
-  pdf("../plots/gunpoint/gunpoint_imbalanced_original_data.pdf", width = 12, height = 8)
+  pdf("../../plots/gunpoint/gunpoint_imbalanced_original_data.pdf", width = 12, height = 8)
   print(original_plot)
   dev.off()
-  cat("Imbalanced original data plot saved to ../plots/gunpoint/gunpoint_imbalanced_original_data.pdf\n")
+  cat("Imbalanced original data plot saved to ../../plots/gunpoint/gunpoint_imbalanced_original_data.pdf\n")
   
   # Run analysis on raw time series
   cat("\n3. Analyzing raw time series data...\n")
-  raw_wicmad_data <- prepare_wicmad_data(data$train_data, data$train_labels, data$target_dim)
+  raw_wicmad_data <- prepare_wicmad_data(data$train_data, data$train_labels)
   raw_results <- run_wicmad_analysis(raw_wicmad_data, "Raw Time Series")
   
   # Plot raw time series clustering results
@@ -533,18 +536,18 @@ main <- function() {
     "GunPoint Dataset - After Clustering"
   )
   
-  pdf("../plots/gunpoint/gunpoint_raw_curves_clustering.pdf", width = 12, height = 8)
+  pdf("../../plots/gunpoint/gunpoint_raw_curves_clustering.pdf", width = 12, height = 8)
   print(raw_clustering_plot)
   dev.off()
-  cat("Raw curves clustering plot saved to ../plots/gunpoint/gunpoint_raw_curves_clustering.pdf\n")
+  cat("Raw curves clustering plot saved to ../../plots/gunpoint/gunpoint_raw_curves_clustering.pdf\n")
   
   # Run analysis on derivatives
   cat("\n4. Analyzing derivative data...\n")
-  deriv_wicmad_data <- prepare_derivative_data(data$train_data, data$train_labels, data$target_dim)
+  deriv_wicmad_data <- prepare_derivative_data(data$train_data, data$train_labels)
   deriv_results <- run_wicmad_analysis(deriv_wicmad_data, "Derivatives")
   
   # Plot derivative clustering results (3 separate channels)
-  deriv_data_prep <- prepare_derivative_data(data$train_data, data$train_labels, data$target_dim)
+  deriv_data_prep <- prepare_derivative_data(data$train_data, data$train_labels)
   deriv_clustering_plot <- plot_derivative_clustering_results(
     deriv_data_prep$original_data,
     deriv_data_prep$first_deriv_data,
@@ -554,10 +557,10 @@ main <- function() {
     "GunPoint Dataset - After Clustering"
   )
   
-  pdf("../plots/gunpoint/gunpoint_derivatives_clustering.pdf", width = 12, height = 8)
+  pdf("../../plots/gunpoint/gunpoint_derivatives_clustering.pdf", width = 12, height = 8)
   print(deriv_clustering_plot)
   dev.off()
-  cat("Derivatives clustering plot saved to ../plots/gunpoint/gunpoint_derivatives_clustering.pdf\n")
+  cat("Derivatives clustering plot saved to ../../plots/gunpoint/gunpoint_derivatives_clustering.pdf\n")
   
   
   # Summary

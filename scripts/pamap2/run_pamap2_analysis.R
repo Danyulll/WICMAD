@@ -153,27 +153,26 @@ load_pamap2_data <- function(data_dir) {
   # Convert segment labels to anomaly format
   segment_anomaly_labels <- ifelse(segment_labels == majority_class, 0, 1)
   
-  # Create imbalanced dataset with 5% anomalies
+  # Create imbalanced dataset with approximately 5% anomalies
   normal_indices <- which(segment_anomaly_labels == 0)
   anomaly_indices <- which(segment_anomaly_labels == 1)
   
-  # Calculate how many anomalies we need for 5% of total
-  total_samples <- length(segment_anomaly_labels)
-  n_anomalies_needed <- max(1, round(total_samples * 0.05))
-  n_normal_needed <- total_samples - n_anomalies_needed
+  # Use all available normal samples
+  selected_normal <- normal_indices
+  n_normal_used <- length(selected_normal)
   
-  # Sample the required number of normal and anomaly samples
-  if (length(normal_indices) >= n_normal_needed) {
-    selected_normal <- sample(normal_indices, n_normal_needed)
-  } else {
-    selected_normal <- normal_indices
-  }
+  # Calculate how many anomalies we need for 5% of the total dataset
+  # Total dataset will be: n_normal_used + n_anomalies_needed
+  # We want: n_anomalies_needed / (n_normal_used + n_anomalies_needed) = 0.05
+  # Solving: n_anomalies_needed = 0.05 * (n_normal_used + n_anomalies_needed)
+  # n_anomalies_needed = 0.05 * n_normal_used / (1 - 0.05) = 0.05 * n_normal_used / 0.95
+  n_anomalies_needed <- max(1, round(0.05 * n_normal_used / 0.95))
   
-  if (length(anomaly_indices) >= n_anomalies_needed) {
-    selected_anomaly <- sample(anomaly_indices, n_anomalies_needed)
-  } else {
-    selected_anomaly <- anomaly_indices
-  }
+  # Ensure we don't exceed available anomaly samples
+  n_anomalies_needed <- min(n_anomalies_needed, length(anomaly_indices))
+  
+  # Sample the required number of anomaly samples
+  selected_anomaly <- sample(anomaly_indices, n_anomalies_needed)
   
   # Combine selected indices
   selected_indices <- c(selected_normal, selected_anomaly)
@@ -192,6 +191,10 @@ load_pamap2_data <- function(data_dir) {
   cat("Normal (Class", majority_class, "):", sum(imbalanced_labels == 0), "\n")
   cat("Anomaly (Classes", paste(minority_classes, collapse = ", "), "):", sum(imbalanced_labels == 1), "\n")
   cat("Anomaly percentage:", round(mean(imbalanced_labels == 1) * 100, 1), "%\n")
+  
+  # Debug output for anomaly percentage
+  cat("Debug: n_normal_used =", n_normal_used, ", n_anomalies_needed =", n_anomalies_needed, "\n")
+  cat("Debug: Actual anomaly percentage =", round(mean(imbalanced_labels == 1) * 100, 1), "%\n")
   
   return(list(
     train_series = imbalanced_series,
@@ -438,12 +441,12 @@ main <- function() {
   cat("=== PAMAP2 Dataset Analysis with WICMAD ===\n")
   
   # Create output directory
-  output_dir <- "../plots/pamap2"
+  output_dir <- "../../plots/pamap2"
   dir.create(output_dir, recursive = TRUE)
   
   # Load data
   cat("\n1. Loading PAMAP2 dataset with 5% anomaly class...\n")
-  data <- load_pamap2_data(data_dir = "../data")
+  data <- load_pamap2_data(data_dir = "../../data")
   
   # Create original data visualization
   cat("\n2. Creating original data visualization...\n")
@@ -459,10 +462,10 @@ main <- function() {
                                        "PAMAP2 - Before Clustering")
   
   # Save original data plot
-  pdf("../plots/pamap2/pamap2_original_data.pdf", width = 12, height = 8)
+  pdf("../../plots/pamap2/pamap2_original_data.pdf", width = 12, height = 8)
   print(original_plot)
   dev.off()
-  cat("Original data plot saved to ../plots/pamap2/pamap2_original_data.pdf\n")
+  cat("Original data plot saved to ../../plots/pamap2/pamap2_original_data.pdf\n")
   
   # Run WICMAD analysis on raw data
   cat("\n3. Analyzing raw sensor data...\n")
@@ -486,10 +489,10 @@ main <- function() {
   )
   
   # Save clustering results plot
-  pdf("../plots/pamap2/pamap2_clustering_results.pdf", width = 12, height = 8)
+  pdf("../../plots/pamap2/pamap2_clustering_results.pdf", width = 12, height = 8)
   print(clustering_plot)
   dev.off()
-  cat("Clustering results plot saved to ../plots/pamap2/pamap2_clustering_results.pdf\n")
+  cat("Clustering results plot saved to ../../plots/pamap2/pamap2_clustering_results.pdf\n")
   
   # Print final results
   cat("\n=== Final Results ===\n")
@@ -497,7 +500,7 @@ main <- function() {
   cat("Accuracy:", round(raw_results$metrics$Accuracy, 3), "\n")
   cat("Adjusted Rand Index:", round(raw_results$metrics$ARI, 3), "\n")
   
-  cat("\nAnalysis complete! Plots saved to ../plots/pamap2/\n")
+  cat("\nAnalysis complete! Plots saved to ../../plots/pamap2/\n")
 }
 
 # Run the analysis

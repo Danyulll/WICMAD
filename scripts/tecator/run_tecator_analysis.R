@@ -41,9 +41,10 @@ load_tecator_data <- function(imbalance_ratio = 0.05) {
   cat("Protein content range:", range(protein_content), "\n")
   cat("Moisture content range:", range(moisture_content), "\n")
   
-  # Set target dimension to 16 for testing
-  target_dim <- 16
-  cat("Using target dimension for testing:", target_dim, "\n")
+  # Find the highest power of 2 supported by the data
+  max_dim <- ncol(absor_spectra)
+  target_dim <- 2^floor(log2(max_dim))
+  cat("Using p parameter (highest power of 2):", target_dim, "\n")
   
   # Create binary labels based on fat content (high fat vs low fat)
   # Use median as threshold for binary classification
@@ -55,7 +56,7 @@ load_tecator_data <- function(imbalance_ratio = 0.05) {
   cat("High fat samples:", sum(labels == 1), "\n")
   cat("Fat threshold:", round(fat_threshold, 2), "\n")
   
-  # Create imbalanced dataset with 5% anomalies
+  # Create imbalanced dataset with approximately 5% anomalies
   cat("Creating imbalanced dataset with 5% anomalies...\n")
   
   # Identify majority and minority classes
@@ -69,29 +70,25 @@ load_tecator_data <- function(imbalance_ratio = 0.05) {
   # Create binary labels: majority = 0 (normal), minority = 1 (anomaly)
   binary_labels <- ifelse(labels == majority_class, 0, 1)
   
-  # Calculate how many anomalies we need for 5%
-  total_samples <- length(binary_labels)
-  n_anomalies_needed <- round(total_samples * imbalance_ratio)
-  n_normal_needed <- total_samples - n_anomalies_needed
-  
-  cat("Target: Normal samples:", n_normal_needed, "Anomaly samples:", n_anomalies_needed, "\n")
-  
-  # Get indices for each class
+  # Use all available normal samples
   normal_indices <- which(binary_labels == 0)
   anomaly_indices <- which(binary_labels == 1)
   
-  # Sample the required number of each class
-  if (length(normal_indices) >= n_normal_needed) {
-    selected_normal <- sample(normal_indices, n_normal_needed)
-  } else {
-    selected_normal <- normal_indices
-  }
+  selected_normal <- normal_indices
+  n_normal_used <- length(selected_normal)
   
-  if (length(anomaly_indices) >= n_anomalies_needed) {
-    selected_anomaly <- sample(anomaly_indices, n_anomalies_needed)
-  } else {
-    selected_anomaly <- anomaly_indices
-  }
+  # Calculate how many anomalies we need for 5% of the total dataset
+  # Total dataset will be: n_normal_used + n_anomalies_needed
+  # We want: n_anomalies_needed / (n_normal_used + n_anomalies_needed) = 0.05
+  # Solving: n_anomalies_needed = 0.05 * (n_normal_used + n_anomalies_needed)
+  # n_anomalies_needed = 0.05 * n_normal_used / (1 - 0.05) = 0.05 * n_normal_used / 0.95
+  n_anomalies_needed <- max(1, round(0.05 * n_normal_used / 0.95))
+  
+  # Ensure we don't exceed available anomaly samples
+  n_anomalies_needed <- min(n_anomalies_needed, length(anomaly_indices))
+  
+  # Sample the required number of anomaly samples
+  selected_anomaly <- sample(anomaly_indices, n_anomalies_needed)
   
   # Combine selected indices
   selected_indices <- c(selected_normal, selected_anomaly)
@@ -111,6 +108,10 @@ load_tecator_data <- function(imbalance_ratio = 0.05) {
   cat("Anomaly (minority class):", sum(imbalanced_labels == 1), "\n")
   cat("Anomaly percentage:", round(mean(imbalanced_labels == 1) * 100, 1), "%\n")
   
+  # Debug output for anomaly percentage
+  cat("Debug: n_normal_used =", n_normal_used, ", n_anomalies_needed =", n_anomalies_needed, "\n")
+  cat("Debug: Actual anomaly percentage =", round(mean(imbalanced_labels == 1) * 100, 1), "%\n")
+  
   return(list(
     train_labels = imbalanced_labels,
     train_spectra = imbalanced_spectra,
@@ -126,7 +127,13 @@ load_tecator_data <- function(imbalance_ratio = 0.05) {
 }
 
 # Function to interpolate time series to target dimension
-interpolate_series <- function(series, target_dim = 16) {
+interpolate_series <- function(series, target_dim = NULL) {
+  # Find the highest power of 2 supported by the data
+  if (is.null(target_dim)) {
+    max_dim <- length(series)
+    target_dim <- 2^floor(log2(max_dim))
+  }
+  
   n <- length(series)
   if (n == target_dim) {
     return(series)
@@ -143,8 +150,15 @@ interpolate_series <- function(series, target_dim = 16) {
 }
 
 # Function to perform functional PCA and select components for 90% variance
-perform_fpca <- function(spectra, target_dim = 16) {
+perform_fpca <- function(spectra, target_dim = NULL) {
   cat("Performing functional PCA analysis...\n")
+  
+  # Find the highest power of 2 supported by the data
+  if (is.null(target_dim)) {
+    max_dim <- ncol(spectra)
+    target_dim <- 2^floor(log2(max_dim))
+    cat("Using p parameter (highest power of 2):", target_dim, "\n")
+  }
   
   # Interpolate all spectra to same length
   n_series <- nrow(spectra)
@@ -200,8 +214,15 @@ perform_fpca <- function(spectra, target_dim = 16) {
 }
 
 # Function to prepare data for WICMAD (raw spectra)
-prepare_wicmad_data <- function(spectra, labels, target_dim = 64) {
+prepare_wicmad_data <- function(spectra, labels, target_dim = NULL) {
   cat("Preparing raw spectra data for WICMAD...\n")
+  
+  # Find the highest power of 2 supported by the data
+  if (is.null(target_dim)) {
+    max_dim <- ncol(spectra)
+    target_dim <- 2^floor(log2(max_dim))
+    cat("Using p parameter (highest power of 2):", target_dim, "\n")
+  }
   
   # Interpolate each spectrum to target dimensions
   n_series <- nrow(spectra)
@@ -227,33 +248,38 @@ prepare_wicmad_data <- function(spectra, labels, target_dim = 64) {
 prepare_derivative_data <- function(original_spectra, spectra1, spectra2, labels) {
   cat("Preparing derivative data for WICMAD...\n")
   
+  # Find the highest power of 2 supported by the data
+  max_dim <- ncol(original_spectra)
+  target_dim <- 2^floor(log2(max_dim))
+  cat("Using p parameter (highest power of 2):", target_dim, "\n")
+  
   n_series <- nrow(original_spectra)
   
-  # Interpolate original data to 16 dimensions first
-  original_interp <- matrix(0, nrow = n_series, ncol = 16)
+  # Interpolate original data to target dimensions first
+  original_interp <- matrix(0, nrow = n_series, ncol = target_dim)
   for (i in seq_len(n_series)) {
-    original_interp[i, ] <- interpolate_series(original_spectra[i, ], 16)
+    original_interp[i, ] <- interpolate_series(original_spectra[i, ], target_dim)
   }
   
   # Interpolate first derivative
-  first_deriv_interp <- matrix(0, nrow = n_series, ncol = 16)
+  first_deriv_interp <- matrix(0, nrow = n_series, ncol = target_dim)
   for (i in seq_len(n_series)) {
-    first_deriv_interp[i, ] <- interpolate_series(spectra1[i, ], 16)
+    first_deriv_interp[i, ] <- interpolate_series(spectra1[i, ], target_dim)
   }
   
   # Interpolate second derivative
-  second_deriv_interp <- matrix(0, nrow = n_series, ncol = 16)
+  second_deriv_interp <- matrix(0, nrow = n_series, ncol = target_dim)
   for (i in seq_len(n_series)) {
-    second_deriv_interp[i, ] <- interpolate_series(spectra2[i, ], 16)
+    second_deriv_interp[i, ] <- interpolate_series(spectra2[i, ], target_dim)
   }
   
   # Create time coordinates
-  t <- seq(0, 1, length.out = 16)
+  t <- seq(0, 1, length.out = target_dim)
   
   # Convert to list format for WICMAD (each element is a PxM matrix)
-  # P=16 (time points), M=3 (original + first + second derivatives)
+  # P=target_dim (time points), M=3 (original + first + second derivatives)
   Y <- lapply(seq_len(n_series), function(i) {
-    matrix(c(original_interp[i, ], first_deriv_interp[i, ], second_deriv_interp[i, ]), nrow = 16, ncol = 3)
+    matrix(c(original_interp[i, ], first_deriv_interp[i, ], second_deriv_interp[i, ]), nrow = target_dim, ncol = 3)
   })
   
   return(list(Y = Y, t = t, labels = labels, 
@@ -267,7 +293,7 @@ prepare_fpca_data <- function(spectra, labels) {
   cat("Preparing FPCA data for WICMAD...\n")
   
   # Perform functional PCA
-  fpca_result <- perform_fpca(spectra, 16)
+  fpca_result <- perform_fpca(spectra, NULL)
   
   # Create time coordinates for the functional components
   t <- fpca_result$time_points
@@ -621,6 +647,10 @@ run_wicmad_analysis <- function(data_prep, data_name, spectra, labels, spectra1 
 main <- function() {
   cat("=== Tecator Dataset Analysis with WICMAD ===\n\n")
   
+  # Create output directory
+  output_dir <- "../../plots/tecator"
+  dir.create(output_dir, recursive = TRUE)
+  
   # Load data with 5% high fat class
   cat("1. Loading Tecator dataset with 5% high fat class...\n")
   data <- load_tecator_data(imbalance_ratio = 0.05)
@@ -629,18 +659,7 @@ main <- function() {
   target_dim <- data$target_dim
   cat("Using target dimension P =", target_dim, "(highest power of 2 available)\n")
   
-  # Limit to 30 observations for testing
-  if (nrow(data$train_spectra) > 30) {
-    cat("Limiting to 30 observations for testing...\n")
-    indices <- sample(nrow(data$train_spectra), 30)
-    data$train_spectra <- data$train_spectra[indices, ]
-    data$train_spectra1 <- data$train_spectra1[indices, ]
-    data$train_spectra2 <- data$train_spectra2[indices, ]
-    data$train_labels <- data$train_labels[indices]
-    data$train_fat <- data$train_fat[indices]
-    data$train_protein <- data$train_protein[indices]
-    data$train_moisture <- data$train_moisture[indices]
-  }
+  # Use all available data (no artificial limits)
   
   # Print data summary
   cat("Training data shape:", nrow(data$train_spectra), "x", ncol(data$train_spectra), "\n")
@@ -654,15 +673,15 @@ main <- function() {
                                        "Tecator Dataset - Before Clustering")
   
   # Save original data plot
-  pdf("../plots/tecator/tecator_imbalanced_original_data.pdf", width = 12, height = 8)
+  pdf("../../plots/tecator/tecator_imbalanced_original_data.pdf", width = 12, height = 8)
   print(original_plot)
   dev.off()
-  cat("Imbalanced original data plot saved to ../plots/tecator/tecator_imbalanced_original_data.pdf\n")
+  cat("Imbalanced original data plot saved to ../../plots/tecator/tecator_imbalanced_original_data.pdf\n")
   
   # Run analysis on raw spectra
   cat("\n3. Analyzing raw spectra data...\n")
   raw_results <- run_wicmad_analysis(
-    function(spectra, labels) prepare_wicmad_data(spectra, labels, target_dim), 
+    function(spectra, labels) prepare_wicmad_data(spectra, labels, NULL), 
     "Raw Spectra", 
     data$train_spectra, 
     data$train_labels
@@ -676,10 +695,10 @@ main <- function() {
     "Tecator Dataset - After Clustering"
   )
   
-  pdf("../plots/tecator/tecator_raw_spectra_clustering.pdf", width = 12, height = 8)
+  pdf("../../plots/tecator/tecator_raw_spectra_clustering.pdf", width = 12, height = 8)
   print(raw_clustering_plot)
   dev.off()
-  cat("Raw spectra clustering plot saved to ../plots/tecator/tecator_raw_spectra_clustering.pdf\n")
+  cat("Raw spectra clustering plot saved to ../../plots/tecator/tecator_raw_spectra_clustering.pdf\n")
   
   # Run analysis on derivatives
   cat("\n4. Analyzing derivative data...\n")
@@ -703,10 +722,10 @@ main <- function() {
     "Tecator Dataset - After Clustering"
   )
   
-  pdf("../plots/tecator/tecator_derivatives_clustering.pdf", width = 12, height = 8)
+  pdf("../../plots/tecator/tecator_derivatives_clustering.pdf", width = 12, height = 8)
   print(deriv_clustering_plot)
   dev.off()
-  cat("Derivatives clustering plot saved to ../plots/tecator/tecator_derivatives_clustering.pdf\n")
+  cat("Derivatives clustering plot saved to ../../plots/tecator/tecator_derivatives_clustering.pdf\n")
   
   # Run analysis on FPCA data
   cat("\n5. Analyzing FPCA data...\n")
@@ -727,18 +746,18 @@ main <- function() {
     "Tecator Dataset - After Clustering"
   )
   
-  pdf("../plots/tecator/tecator_fpca_clustering.pdf", width = 12, height = 8)
+  pdf("../../plots/tecator/tecator_fpca_clustering.pdf", width = 12, height = 8)
   print(fpca_clustering_plot)
   dev.off()
-  cat("FPCA clustering plot saved to ../plots/tecator/tecator_fpca_clustering.pdf\n")
+  cat("FPCA clustering plot saved to ../../plots/tecator/tecator_fpca_clustering.pdf\n")
   
   # Print final summary
   cat("\n=== Imbalanced Analysis Complete ===\n")
   cat("Generated files:\n")
-  cat("- ../plots/tecator/tecator_imbalanced_original_data.pdf: Imbalanced spectra (5% high fat, overlapped)\n")
-  cat("- ../plots/tecator/tecator_raw_spectra_clustering.pdf: Raw spectra clustering results\n")
-  cat("- ../plots/tecator/tecator_derivatives_clustering.pdf: Derivatives clustering results\n")
-  cat("- ../plots/tecator/tecator_fpca_clustering.pdf: FPCA clustering results\n")
+  cat("- ../../plots/tecator/tecator_imbalanced_original_data.pdf: Imbalanced spectra (5% high fat, overlapped)\n")
+  cat("- ../../plots/tecator/tecator_raw_spectra_clustering.pdf: Raw spectra clustering results\n")
+  cat("- ../../plots/tecator/tecator_derivatives_clustering.pdf: Derivatives clustering results\n")
+  cat("- ../../plots/tecator/tecator_fpca_clustering.pdf: FPCA clustering results\n")
   
   cat("\nPerformance Comparison:\n")
   cat("Raw Spectra - Precision:", round(raw_results$metrics$Macro_Precision, 4), 

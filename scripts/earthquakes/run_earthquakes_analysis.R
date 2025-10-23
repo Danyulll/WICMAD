@@ -47,20 +47,51 @@ load_earthquakes_data <- function(data_dir, imbalance_ratio = 0.05) {
   cat("Majority class (normal):", majority_class, "\n")
   cat("Minority class (earthquake):", minority_class, "\n")
   
-  # Create imbalanced dataset with 5% minority class
-  # Use all available data for analysis
-  cat("Using all available data for analysis\n")
-  
-  # Use the data as-is
-  imbalanced_series <- all_series
-  imbalanced_labels <- all_labels
-  
+  # Create imbalanced dataset with approximately 5% anomalies
   # Map to binary classification (0 = normal, 1 = anomaly)
-  binary_labels <- ifelse(imbalanced_labels == majority_class, 0, 1)
+  binary_labels <- ifelse(all_labels == majority_class, 0, 1)
   
-  cat("Final dataset size:", nrow(imbalanced_series), "\n")
-  cat("Final label distribution:\n")
-  print(table(binary_labels))
+  # Find normal and anomaly indices
+  normal_indices <- which(binary_labels == 0)
+  anomaly_indices <- which(binary_labels == 1)
+  
+  # Use all available normal samples
+  selected_normal <- normal_indices
+  n_normal_used <- length(selected_normal)
+  
+  # Calculate how many anomalies we need for 5% of the total dataset
+  # Total dataset will be: n_normal_used + n_anomalies_needed
+  # We want: n_anomalies_needed / (n_normal_used + n_anomalies_needed) = 0.05
+  # Solving: n_anomalies_needed = 0.05 * (n_normal_used + n_anomalies_needed)
+  # n_anomalies_needed = 0.05 * n_normal_used / (1 - 0.05) = 0.05 * n_normal_used / 0.95
+  n_anomalies_needed <- max(1, round(0.05 * n_normal_used / 0.95))
+  
+  # Ensure we don't exceed available anomaly samples
+  n_anomalies_needed <- min(n_anomalies_needed, length(anomaly_indices))
+  
+  # Sample the required number of anomaly samples
+  selected_anomaly <- sample(anomaly_indices, n_anomalies_needed)
+  
+  # Combine selected indices
+  selected_indices <- c(selected_normal, selected_anomaly)
+  
+  # Create imbalanced dataset
+  imbalanced_series <- all_series[selected_indices, ]
+  imbalanced_labels <- binary_labels[selected_indices]
+  
+  # Shuffle the data
+  shuffle_indices <- sample(length(imbalanced_labels))
+  imbalanced_series <- imbalanced_series[shuffle_indices, ]
+  imbalanced_labels <- imbalanced_labels[shuffle_indices]
+  
+  cat("Final imbalanced dataset:\n")
+  cat("Total samples:", nrow(imbalanced_series), "\n")
+  cat("Normal (Class", majority_class, "):", sum(imbalanced_labels == 0), "\n")
+  cat("Anomaly (Class", minority_class, "):", sum(imbalanced_labels == 1), "\n")
+  cat("Anomaly percentage:", round(mean(imbalanced_labels == 1) * 100, 1), "%\n")
+  cat("Target anomaly percentage: 5.0%\n")
+  cat("Available normal samples used:", n_normal_used, "\n")
+  cat("Available anomaly samples used:", n_anomalies_needed, "out of", length(anomaly_indices), "\n")
   
   # Find the highest power of 2 supported by the data
   max_dim <- ncol(all_series)
@@ -138,7 +169,9 @@ prepare_wicmad_data <- function(series_data, labels, target_dim = 16) {
   interpolated_series <- matrix(0, nrow = n_series, ncol = target_dim)
   
   for (i in seq_len(n_series)) {
-    interpolated_series[i, ] <- interpolate_series(series_data[i, ], target_dim)
+    # Extract the i-th row (time series) and interpolate it
+    series_row <- as.numeric(series_data[i, ])
+    interpolated_series[i, ] <- interpolate_series(series_row, target_dim)
   }
   
   # Create time coordinates
@@ -164,8 +197,9 @@ prepare_derivative_data <- function(series_data, labels, target_dim = 16) {
   second_deriv_list <- list()
   
   for (i in seq_len(n_series)) {
-    # Interpolate to target dimension first
-    interpolated <- interpolate_series(series_data[i, ], target_dim)
+    # Extract the i-th row (time series) and interpolate to target dimension first
+    series_row <- as.numeric(series_data[i, ])
+    interpolated <- interpolate_series(series_row, target_dim)
     
     # Compute derivatives (now properly padded to target_dim)
     derivs <- compute_derivatives(interpolated)
@@ -377,19 +411,11 @@ main <- function() {
   cat("=== Earthquakes Dataset Analysis ===\n")
   
   # Set data directory
-  data_dir <- "../data/Earthquakes"
+  data_dir <- "../../data/Earthquakes"
   
   # Load data
   cat("\n1. Loading earthquakes dataset...\n")
   data <- load_earthquakes_data(data_dir, imbalance_ratio = 0.05)
-  
-  # Limit to 30 observations for testing
-  if (nrow(data$train_data) > 30) {
-    cat("Limiting to 30 observations for testing...\n")
-    indices <- sample(nrow(data$train_data), 30)
-    data$train_data <- data$train_data[indices, ]
-    data$train_labels <- data$train_labels[indices]
-  }
   
   cat("Label distribution:\n")
   print(table(data$train_labels))
@@ -402,9 +428,9 @@ main <- function() {
                                        "Earthquakes Dataset - Before Clustering")
   
   # Save original data plot
-  ggsave("../plots/earthquakes/earthquakes_imbalanced_original_data.pdf", original_plot, 
+  ggsave("../../plots/earthquakes/earthquakes_imbalanced_original_data.pdf", original_plot, 
          width = 10, height = 6, dpi = 300)
-  cat("Saved: ../plots/earthquakes/earthquakes_imbalanced_original_data.pdf\n")
+  cat("Saved: ../../plots/earthquakes/earthquakes_imbalanced_original_data.pdf\n")
   
   # Prepare data for different analyses
   cat("\n3. Preparing data for WICMAD analysis...\n")
@@ -449,13 +475,13 @@ main <- function() {
   
   
   # Save clustering plots
-  ggsave("../plots/earthquakes/earthquakes_raw_curves_clustering.pdf", raw_clustering_plot, 
+  ggsave("../../plots/earthquakes/earthquakes_raw_curves_clustering.pdf", raw_clustering_plot, 
          width = 10, height = 6, dpi = 300)
-  cat("Saved: ../plots/earthquakes/earthquakes_raw_curves_clustering.pdf\n")
+  cat("Saved: ../../plots/earthquakes/earthquakes_raw_curves_clustering.pdf\n")
   
-  ggsave("../plots/earthquakes/earthquakes_derivatives_clustering.pdf", deriv_clustering_plot, 
+  ggsave("../../plots/earthquakes/earthquakes_derivatives_clustering.pdf", deriv_clustering_plot, 
          width = 10, height = 8, dpi = 300)
-  cat("Saved: ../plots/earthquakes/earthquakes_derivatives_clustering.pdf\n")
+  cat("Saved: ../../plots/earthquakes/earthquakes_derivatives_clustering.pdf\n")
   
   
   cat("\n=== Analysis Complete ===\n")

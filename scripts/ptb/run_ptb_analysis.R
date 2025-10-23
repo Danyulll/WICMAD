@@ -54,26 +54,68 @@ load_ptb_data <- function(data_dir, reveal_ratio = 0.15) {
     }
   }
   
-  # For test mode, just use the limited samples as-is (no resampling)
-  cat("Using limited samples for testing (no resampling)\n")
+  # Create imbalanced dataset with approximately 5% anomalies
+  normal_indices <- which(labels == 0)
+  anomaly_indices <- which(labels == 1)
   
-  # Use the data as-is
-  imbalanced_labels <- labels
+  # Use all available normal samples
+  selected_normal <- normal_indices
+  n_normal_used <- length(selected_normal)
   
-  cat("Final dataset:\n")
+  # Calculate how many anomalies we need for 5% of the total dataset
+  # Total dataset will be: n_normal_used + n_anomalies_needed
+  # We want: n_anomalies_needed / (n_normal_used + n_anomalies_needed) = 0.05
+  # Solving: n_anomalies_needed = 0.05 * (n_normal_used + n_anomalies_needed)
+  # n_anomalies_needed = 0.05 * n_normal_used / (1 - 0.05) = 0.05 * n_normal_used / 0.95
+  n_anomalies_needed <- max(1, round(0.05 * n_normal_used / 0.95))
+  
+  # Ensure we don't exceed available anomaly samples
+  n_anomalies_needed <- min(n_anomalies_needed, length(anomaly_indices))
+  
+  # Sample the required number of anomaly samples
+  selected_anomaly <- sample(anomaly_indices, n_anomalies_needed)
+  
+  # Combine selected indices
+  selected_indices <- c(selected_normal, selected_anomaly)
+  
+  # Create imbalanced dataset
+  imbalanced_labels <- labels[selected_indices]
+  
+  cat("Final imbalanced dataset:\n")
   cat("Total samples:", length(imbalanced_labels), "\n")
   cat("Normal:", sum(imbalanced_labels == 0), "\n")
   cat("Abnormal:", sum(imbalanced_labels == 1), "\n")
   cat("Abnormal percentage:", round(mean(imbalanced_labels == 1) * 100, 1), "%\n")
   
+  # Debug output for anomaly percentage
+  cat("Debug: n_normal_used =", n_normal_used, ", n_anomalies_needed =", n_anomalies_needed, "\n")
+  cat("Debug: Actual anomaly percentage =", round(mean(imbalanced_labels == 1) * 100, 1), "%\n")
+  
   # Load real PTB ECG data from .dat files
   cat("Loading real PTB ECG data from .dat files...\n")
   
+  # Limit to 1000 samples maximum
+  max_samples <- 1000
+  if (length(selected_indices) > max_samples) {
+    cat("Limiting to", max_samples, "samples...\n")
+    # Sample 1000 indices from the selected ones
+    final_indices <- sample(selected_indices, max_samples)
+    # Keep the labels aligned with the selected indices
+    imbalanced_labels <- labels[final_indices]
+    selected_indices <- final_indices
+  }
+  
+  cat("Debug: selected_indices length:", length(selected_indices), "\n")
+  cat("Debug: imbalanced_labels length:", length(imbalanced_labels), "\n")
+  cat("Debug: First few selected_indices:", head(selected_indices, 5), "\n")
+  cat("Debug: First few imbalanced_labels:", head(imbalanced_labels, 5), "\n")
+  
   n_samples <- length(imbalanced_labels)
   series_list <- list()
+  valid_indices <- c()  # Track which samples loaded successfully
   
   # Get the filenames for the selected samples
-  selected_filenames <- database$filename_lr[seq_len(n_samples)]
+  selected_filenames <- database$filename_lr[selected_indices]
   
   cat("Loading", n_samples, "real ECG samples...\n")
   
@@ -84,6 +126,11 @@ load_ptb_data <- function(data_dir, reveal_ratio = 0.15) {
     
     # Get the filename for this sample
     filename <- selected_filenames[i]
+    
+    # Debug: track which samples are being processed
+    if (i <= 10) {
+      cat("Debug: Processing sample", i, "with filename:", filename, "and label:", imbalanced_labels[i], "\n")
+    }
     
     # Construct full path to the .dat file (add .dat extension)
     dat_file <- file.path(data_dir, paste0(filename, ".dat"))
@@ -192,6 +239,34 @@ load_ptb_data <- function(data_dir, reveal_ratio = 0.15) {
     }
   }
   
+  # Filter out any samples that failed to load (have NULL or invalid data)
+  # Check for NULL entries and also check if the matrix has valid dimensions
+  valid_samples <- sapply(series_list, function(x) {
+    !is.null(x) && is.matrix(x) && nrow(x) > 0 && ncol(x) > 0 && !any(is.na(x))
+  })
+  
+  if (any(!valid_samples)) {
+    cat("Warning: Some samples failed to load, filtering out", sum(!valid_samples), "failed samples\n")
+    series_list <- series_list[valid_samples]
+    imbalanced_labels <- imbalanced_labels[valid_samples]
+  }
+  
+  # Additional check: ensure labels and series are the same length
+  if (length(series_list) != length(imbalanced_labels)) {
+    cat("Error: Mismatch between series count (", length(series_list), ") and labels count (", length(imbalanced_labels), ")\n")
+    # Take the minimum length to ensure alignment
+    min_length <- min(length(series_list), length(imbalanced_labels))
+    series_list <- series_list[1:min_length]
+    imbalanced_labels <- imbalanced_labels[1:min_length]
+    cat("Truncated to", min_length, "samples to ensure alignment\n")
+  }
+  
+  cat("Final dataset after filtering:\n")
+  cat("Total samples:", length(series_list), "\n")
+  cat("Normal:", sum(imbalanced_labels == 0, na.rm = TRUE), "\n")
+  cat("Abnormal:", sum(imbalanced_labels == 1, na.rm = TRUE), "\n")
+  cat("Abnormal percentage:", round(mean(imbalanced_labels == 1, na.rm = TRUE) * 100, 1), "%\n")
+  
   return(list(
     train_series = series_list,
     train_labels = imbalanced_labels,
@@ -201,7 +276,13 @@ load_ptb_data <- function(data_dir, reveal_ratio = 0.15) {
 }
 
 # Function to interpolate time series to target dimension
-interpolate_series <- function(series, target_dim = 16) {
+interpolate_series <- function(series, target_dim = NULL) {
+  # Find the highest power of 2 supported by the data
+  if (is.null(target_dim)) {
+    max_dim <- nrow(series)
+    target_dim <- 2^floor(log2(max_dim))
+  }
+  
   n <- nrow(series)
   if (n == target_dim) {
     return(series)
@@ -224,17 +305,22 @@ prepare_wicmad_data <- function(series_list, labels) {
   
   n_series <- length(series_list)
   
-  # Interpolate each series to 128 dimensions (highest power of 2)
+  # Find the highest power of 2 supported by the data
+  max_dim <- max(sapply(series_list, nrow))
+  target_dim <- 2^floor(log2(max_dim))
+  cat("Using p parameter (highest power of 2):", target_dim, "\n")
+  
+  # Interpolate each series to target dimensions
   interpolated_series <- list()
   for (i in seq_len(n_series)) {
-    interpolated_series[[i]] <- interpolate_series(series_list[[i]], 16)
+    interpolated_series[[i]] <- interpolate_series(series_list[[i]], target_dim)
   }
   
   # Create time coordinates
-  t <- seq(0, 1, length.out = 16)
+  t <- seq(0, 1, length.out = target_dim)
   
   # Convert to list format for WICMAD (each element is a PxM matrix)
-  # P=16 (time points), M=12 (ECG leads)
+  # P=target_dim (time points), M=12 (ECG leads)
   Y <- interpolated_series
   
   return(list(Y = Y, t = t, labels = labels))
@@ -400,20 +486,18 @@ plot_clustering_results <- function(series_list, true_labels, cluster_assignment
 main <- function() {
   cat("=== PTB Dataset Analysis with WICMAD ===\n")
   
+  # Create output directory
+  output_dir <- "../../plots/ptb"
+  dir.create(output_dir, recursive = TRUE)
+  
   # Set data directory
-  data_dir <- "../data/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3"
+  data_dir <- "../../data/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3"
   
   # Load data
   cat("1. Loading PTB dataset...\n")
   data <- load_ptb_data(data_dir, reveal_ratio = 0.15)
   
-  # Limit to 30 observations for testing
-  if (length(data$train_series) > 30) {
-    cat("Limiting to 30 observations for testing...\n")
-    indices <- sample(length(data$train_series), 30)
-    data$train_series <- data$train_series[indices]
-    data$train_labels <- data$train_labels[indices]
-  }
+  # Use all available data (up to 1000 samples with 5% anomalies)
   
   # Print data summary
   cat("Training data: ", length(data$train_series), " series\n")
@@ -424,14 +508,16 @@ main <- function() {
   # Plot original data (overlapped) - subsample for visualization
   cat("\n2. Creating original data visualization...\n")
   
-  # Create a subsample of 100 curves with 5% anomalies for plotting
-  n_plot_samples <- 100
-  n_plot_anomalies <- 5  # 5% of 100
-  n_plot_normal <- 95    # 95% of 100
+  # Create a subsample of 100 curves for plotting (maintain 5% anomaly ratio)
+  n_plot_samples <- min(100, length(data$train_series))
   
   # Find normal and abnormal indices
   normal_indices <- which(data$train_labels == 0)
   abnormal_indices <- which(data$train_labels == 1)
+  
+  # Calculate how many anomalies we need for 5% of the plot sample
+  n_plot_anomalies <- max(1, round(0.05 * n_plot_samples))
+  n_plot_normal <- n_plot_samples - n_plot_anomalies
   
   # Sample for plotting
   plot_normal_indices <- sample(normal_indices, min(n_plot_normal, length(normal_indices)))
@@ -451,10 +537,10 @@ main <- function() {
                                        "PTB - Before Clustering")
   
   # Save original data plot
-  pdf("../plots/ptb/ptb_original_data.pdf", width = 12, height = 10)
+  pdf("../../plots/ptb/ptb_original_data.pdf", width = 12, height = 10)
   print(original_plot)
   dev.off()
-  cat("Original data plot saved to ../plots/ptb/ptb_original_data.pdf\n")
+  cat("Original data plot saved to ../../plots/ptb/ptb_original_data.pdf\n")
   
   # Prepare data for WICMAD
   cat("\n3. Preparing data for WICMAD...\n")
@@ -469,9 +555,10 @@ main <- function() {
   wicmad_result <- wicmad(
     Y = wicmad_data$Y,
     t = wicmad_data$t,
-    n_iter = 10,
-    burn = 5,
-    thin = 1
+    n_iter = 8000,
+    burn = 3000,
+    warmup_iters = 500,
+    unpin = FALSE
   )
   
   # Extract cluster assignments
@@ -518,15 +605,15 @@ main <- function() {
   )
   
   # Save clustering results plot
-  pdf("../plots/ptb/ptb_clustering_results.pdf", width = 12, height = 10)
+  pdf("../../plots/ptb/ptb_clustering_results.pdf", width = 12, height = 10)
   print(clustering_plot)
   dev.off()
-  cat("Clustering results plot saved to ../plots/ptb/ptb_clustering_results.pdf\n")
+  cat("Clustering results plot saved to ../../plots/ptb/ptb_clustering_results.pdf\n")
   
   cat("\n=== Analysis Complete ===\n")
   cat("Generated files:\n")
-  cat("- ../plots/ptb/ptb_original_data.pdf: Original ECG data (overlapped)\n")
-  cat("- ../plots/ptb/ptb_clustering_results.pdf: Clustered ECG data\n")
+  cat("- ../../plots/ptb/ptb_original_data.pdf: Original ECG data (overlapped)\n")
+  cat("- ../../plots/ptb/ptb_clustering_results.pdf: Clustered ECG data\n")
   cat("\nFinal Performance:\n")
   cat("Macro Precision:", round(metrics$Macro_Precision, 4), "\n")
   cat("Macro Recall:", round(metrics$Macro_Recall, 4), "\n")

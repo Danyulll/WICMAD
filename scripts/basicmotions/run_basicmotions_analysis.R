@@ -126,25 +126,64 @@ load_basicmotions_data <- function(data_dir, reveal_ratio = 0.15) {
   cat("Test series:", length(test_series_list), "\n")
   cat("Total series:", length(all_series), "\n")
   
-  # Use all available data for analysis
-  cat("Using all available data for analysis\n")
+  # Find the majority class to use as normal
+  class_counts <- table(all_labels)
+  majority_class <- as.numeric(names(class_counts)[which.max(class_counts)])
+  minority_classes <- as.numeric(names(class_counts)[class_counts != max(class_counts)])
   
-  # Use the data as-is
-  imbalanced_series <- all_series
-  imbalanced_labels <- all_labels
+  cat("Class distribution:\n")
+  print(class_counts)
+  cat("Majority class (normal):", majority_class, "\n")
+  cat("Minority classes (anomalies):", paste(minority_classes, collapse = ", "), "\n")
   
-  # Convert to anomaly detection format (0 = normal/Walking, 1 = anomaly/other)
-  anomaly_labels <- ifelse(imbalanced_labels == which(unique_labels == "Walking") - 1, 0, 1)
+  # Convert to anomaly detection format (majority class = normal, others = anomaly)
+  anomaly_labels <- ifelse(all_labels == majority_class, 0, 1)
+  
+  # Create imbalanced dataset with approximately 5% anomalies
+  normal_indices <- which(anomaly_labels == 0)
+  anomaly_indices <- which(anomaly_labels == 1)
+  
+  # Use all available normal samples
+  selected_normal <- normal_indices
+  n_normal_used <- length(selected_normal)
+  
+  # Calculate how many anomalies we need for 5% of the total dataset
+  # Total dataset will be: n_normal_used + n_anomalies_needed
+  # We want: n_anomalies_needed / (n_normal_used + n_anomalies_needed) = 0.05
+  # Solving: n_anomalies_needed = 0.05 * (n_normal_used + n_anomalies_needed)
+  # n_anomalies_needed = 0.05 * n_normal_used / (1 - 0.05) = 0.05 * n_normal_used / 0.95
+  n_anomalies_needed <- max(1, round(0.05 * n_normal_used / 0.95))
+  
+  # Ensure we don't exceed available anomaly samples
+  n_anomalies_needed <- min(n_anomalies_needed, length(anomaly_indices))
+  
+  # Sample the required number of anomaly samples
+  selected_anomaly <- sample(anomaly_indices, n_anomalies_needed)
+  
+  # Combine selected indices
+  selected_indices <- c(selected_normal, selected_anomaly)
+  
+  # Create imbalanced dataset
+  imbalanced_series <- all_series[selected_indices]
+  imbalanced_labels <- anomaly_labels[selected_indices]
+  
+  # Shuffle the data
+  shuffle_indices <- sample(length(imbalanced_labels))
+  imbalanced_series <- imbalanced_series[shuffle_indices]
+  imbalanced_labels <- imbalanced_labels[shuffle_indices]
   
   cat("Final imbalanced dataset:\n")
   cat("Total samples:", length(imbalanced_series), "\n")
-  cat("Normal (Walking):", sum(anomaly_labels == 0), "\n")
-  cat("Anomaly (Other):", sum(anomaly_labels == 1), "\n")
-  cat("Anomaly percentage:", round(mean(anomaly_labels == 1) * 100, 1), "%\n")
+  cat("Normal (Class", majority_class, "):", sum(imbalanced_labels == 0), "\n")
+  cat("Anomaly (Classes", paste(minority_classes, collapse = ", "), "):", sum(imbalanced_labels == 1), "\n")
+  cat("Anomaly percentage:", round(mean(imbalanced_labels == 1) * 100, 1), "%\n")
+  cat("Target anomaly percentage: 5.0%\n")
+  cat("Available normal samples used:", n_normal_used, "\n")
+  cat("Available anomaly samples used:", n_anomalies_needed, "out of", length(anomaly_indices), "\n")
   
   return(list(
     train_series = imbalanced_series,
-    train_labels = anomaly_labels,
+    train_labels = imbalanced_labels,
     test_series = NULL,
     test_labels = NULL
   ))
@@ -354,7 +393,7 @@ main <- function() {
   cat("=== BasicMotions Dataset Analysis with WICMAD ===\n\n")
   
   # Set data directory
-  data_dir <- "../data/BasicMotions"
+  data_dir <- "../../data/BasicMotions"
   
   # Load data
   cat("1. Loading BasicMotions dataset...\n")
@@ -375,10 +414,10 @@ main <- function() {
                                        "BasicMotions - Before Clustering")
   
   # Save original data plot
-  pdf("../plots/basicmotions/basicmotions_original_data.pdf", width = 12, height = 10)
+  pdf("../../plots/basicmotions/basicmotions_original_data.pdf", width = 12, height = 10)
   print(original_plot)
   dev.off()
-  cat("Original data plot saved to ../plots/basicmotions/basicmotions_original_data.pdf\n")
+  cat("Original data plot saved to ../../plots/basicmotions/basicmotions_original_data.pdf\n")
   
   # Prepare data for WICMAD
   cat("\n3. Preparing data for WICMAD...\n")
@@ -437,16 +476,16 @@ main <- function() {
   )
   
   # Save clustering results plot
-  pdf("../plots/basicmotions/basicmotions_clustering_results.pdf", width = 12, height = 10)
+  pdf("../../plots/basicmotions/basicmotions_clustering_results.pdf", width = 12, height = 10)
   print(clustering_plot)
   dev.off()
-  cat("Clustering results plot saved to ../plots/basicmotions/basicmotions_clustering_results.pdf\n")
+  cat("Clustering results plot saved to ../../plots/basicmotions/basicmotions_clustering_results.pdf\n")
   
   # Print final summary
   cat("\n=== Analysis Complete ===\n")
   cat("Generated files:\n")
-  cat("- ../plots/basicmotions/basicmotions_original_data.pdf: Original multivariate time series (overlapped)\n")
-  cat("- ../plots/basicmotions/basicmotions_clustering_results.pdf: Clustered multivariate time series\n")
+  cat("- ../../plots/basicmotions/basicmotions_original_data.pdf: Original multivariate time series (overlapped)\n")
+  cat("- ../../plots/basicmotions/basicmotions_clustering_results.pdf: Clustered multivariate time series\n")
   
   cat("\nFinal Performance:\n")
   cat("Macro Precision:", round(metrics$Macro_Precision, 4), "\n")

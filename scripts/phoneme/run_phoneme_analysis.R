@@ -59,27 +59,26 @@ load_phoneme_data <- function(imbalance_ratio = 0.05) {
   cat("Normal (majority class):", sum(binary_labels == 0), "\n")
   cat("Anomaly (other classes):", sum(binary_labels == 1), "\n")
   
-  # Create imbalanced dataset with 5% anomalies
+  # Create imbalanced dataset with approximately 5% anomalies
   normal_indices <- which(binary_labels == 0)
   anomaly_indices <- which(binary_labels == 1)
   
-  # Calculate how many anomalies we need for 5% of total
-  total_samples <- length(binary_labels)
-  n_anomalies_needed <- max(1, round(total_samples * imbalance_ratio))
-  n_normal_needed <- total_samples - n_anomalies_needed
+  # Use all available normal samples
+  selected_normal <- normal_indices
+  n_normal_used <- length(selected_normal)
   
-  # Sample the required number of normal and anomaly samples
-  if (length(normal_indices) >= n_normal_needed) {
-    selected_normal <- sample(normal_indices, n_normal_needed)
-  } else {
-    selected_normal <- normal_indices
-  }
+  # Calculate how many anomalies we need for 5% of the total dataset
+  # Total dataset will be: n_normal_used + n_anomalies_needed
+  # We want: n_anomalies_needed / (n_normal_used + n_anomalies_needed) = 0.05
+  # Solving: n_anomalies_needed = 0.05 * (n_normal_used + n_anomalies_needed)
+  # n_anomalies_needed = 0.05 * n_normal_used / (1 - 0.05) = 0.05 * n_normal_used / 0.95
+  n_anomalies_needed <- max(1, round(0.05 * n_normal_used / 0.95))
   
-  if (length(anomaly_indices) >= n_anomalies_needed) {
-    selected_anomaly <- sample(anomaly_indices, n_anomalies_needed)
-  } else {
-    selected_anomaly <- anomaly_indices
-  }
+  # Ensure we don't exceed available anomaly samples
+  n_anomalies_needed <- min(n_anomalies_needed, length(anomaly_indices))
+  
+  # Sample the required number of anomaly samples
+  selected_anomaly <- sample(anomaly_indices, n_anomalies_needed)
   
   # Combine selected indices
   selected_indices <- c(selected_normal, selected_anomaly)
@@ -101,6 +100,10 @@ load_phoneme_data <- function(imbalance_ratio = 0.05) {
   cat("Anomaly:", sum(imbalanced_labels == 1), "\n")
   cat("Anomaly percentage:", round(mean(imbalanced_labels == 1) * 100, 1), "%\n")
   
+  # Debug output for anomaly percentage
+  cat("Debug: n_normal_used =", n_normal_used, ", n_anomalies_needed =", n_anomalies_needed, "\n")
+  cat("Debug: Actual anomaly percentage =", round(mean(imbalanced_labels == 1) * 100, 1), "%\n")
+  
   return(list(
     train_labels = imbalanced_labels,
     train_data = imbalanced_data,
@@ -112,7 +115,13 @@ load_phoneme_data <- function(imbalance_ratio = 0.05) {
 }
 
 # Function to interpolate time series to target dimension
-interpolate_series <- function(series, target_dim = 16) {
+interpolate_series <- function(series, target_dim = NULL) {
+  # Find the highest power of 2 supported by the data
+  if (is.null(target_dim)) {
+    max_dim <- length(series)
+    target_dim <- 2^floor(log2(max_dim))
+  }
+  
   n <- length(series)
   if (n == target_dim) {
     return(series)
@@ -129,8 +138,15 @@ interpolate_series <- function(series, target_dim = 16) {
 }
 
 # Function to perform functional PCA and select components for 90% variance
-perform_fpca <- function(data, target_dim = 16) {
+perform_fpca <- function(data, target_dim = NULL) {
   cat("Performing functional PCA analysis...\n")
+  
+  # Find the highest power of 2 supported by the data
+  if (is.null(target_dim)) {
+    max_dim <- ncol(data)
+    target_dim <- 2^floor(log2(max_dim))
+    cat("Using p parameter (highest power of 2):", target_dim, "\n")
+  }
   
   # Interpolate all curves to same length
   n_series <- nrow(data)
@@ -189,21 +205,26 @@ perform_fpca <- function(data, target_dim = 16) {
 prepare_wicmad_data <- function(data, labels) {
   cat("Preparing raw curves data for WICMAD...\n")
   
-  # Interpolate each curve to 16 dimensions
+  # Find the highest power of 2 supported by the data
+  max_dim <- ncol(data)
+  target_dim <- 2^floor(log2(max_dim))
+  cat("Using p parameter (highest power of 2):", target_dim, "\n")
+  
+  # Interpolate each curve to target dimensions
   n_series <- nrow(data)
-  interpolated_data <- matrix(0, nrow = n_series, ncol = 16)
+  interpolated_data <- matrix(0, nrow = n_series, ncol = target_dim)
   
   for (i in seq_len(n_series)) {
-    interpolated_data[i, ] <- interpolate_series(data[i, ], 16)
+    interpolated_data[i, ] <- interpolate_series(data[i, ], target_dim)
   }
   
   # Create time coordinates (normalized to [0,1])
-  t <- seq(0, 1, length.out = 16)
+  t <- seq(0, 1, length.out = target_dim)
   
   # Convert to list format for WICMAD (each element is a PxM matrix)
-  # For univariate data, we need P=16 (time points) and M=1 (channels)
+  # For univariate data, we need P=target_dim (time points) and M=1 (channels)
   Y <- lapply(seq_len(n_series), function(i) {
-    matrix(interpolated_data[i, ], nrow = 16, ncol = 1)
+    matrix(interpolated_data[i, ], nrow = target_dim, ncol = 1)
   })
   
   return(list(Y = Y, t = t, labels = labels))
@@ -249,17 +270,22 @@ compute_derivatives <- function(series) {
 prepare_derivative_data <- function(data, labels) {
   cat("Preparing derivative data for WICMAD...\n")
   
+  # Find the highest power of 2 supported by the data
+  max_dim <- ncol(data)
+  target_dim <- 2^floor(log2(max_dim))
+  cat("Using p parameter (highest power of 2):", target_dim, "\n")
+  
   n_series <- nrow(data)
   
-  # Interpolate original data to 16 dimensions first
-  original_interp <- matrix(0, nrow = n_series, ncol = 16)
+  # Interpolate original data to target dimensions first
+  original_interp <- matrix(0, nrow = n_series, ncol = target_dim)
   for (i in seq_len(n_series)) {
-    original_interp[i, ] <- interpolate_series(data[i, ], 16)
+    original_interp[i, ] <- interpolate_series(data[i, ], target_dim)
   }
   
   # Compute derivatives for each interpolated series
-  first_deriv_data <- matrix(0, nrow = n_series, ncol = 16)
-  second_deriv_data <- matrix(0, nrow = n_series, ncol = 16)
+  first_deriv_data <- matrix(0, nrow = n_series, ncol = target_dim)
+  second_deriv_data <- matrix(0, nrow = n_series, ncol = target_dim)
   
   for (i in seq_len(n_series)) {
     derivs <- compute_derivatives(original_interp[i, ])
@@ -268,12 +294,12 @@ prepare_derivative_data <- function(data, labels) {
   }
   
   # Create time coordinates
-  t <- seq(0, 1, length.out = 16)
+  t <- seq(0, 1, length.out = target_dim)
   
   # Convert to list format for WICMAD (each element is a PxM matrix)
-  # P=16 (time points), M=3 (original + first + second derivatives)
+  # P=target_dim (time points), M=3 (original + first + second derivatives)
   Y <- lapply(seq_len(n_series), function(i) {
-    matrix(c(original_interp[i, ], first_deriv_data[i, ], second_deriv_data[i, ]), nrow = 16, ncol = 3)
+    matrix(c(original_interp[i, ], first_deriv_data[i, ], second_deriv_data[i, ]), nrow = target_dim, ncol = 3)
   })
   
   return(list(Y = Y, t = t, labels = labels, 
@@ -287,7 +313,7 @@ prepare_fpca_data <- function(data, labels) {
   cat("Preparing FPCA data for WICMAD...\n")
   
   # Perform functional PCA
-  fpca_result <- perform_fpca(data, 16)
+  fpca_result <- perform_fpca(data, NULL)
   
   # Create time coordinates for the functional components
   t <- fpca_result$time_points
@@ -632,18 +658,15 @@ run_wicmad_analysis <- function(data_prep, data_name, data, labels, original_lab
 main <- function() {
   cat("=== Phoneme Dataset Analysis with WICMAD ===\n\n")
   
+  # Create output directory
+  output_dir <- "../../plots/phoneme"
+  dir.create(output_dir, recursive = TRUE)
+  
   # Load data with 5% anomaly class
   cat("1. Loading phoneme dataset with 5% anomaly class...\n")
   data <- load_phoneme_data(imbalance_ratio = 0.05)
   
-  # Limit to 30 observations for testing
-  if (nrow(data$train_data) > 30) {
-    cat("Limiting to 30 observations for testing...\n")
-    indices <- sample(nrow(data$train_data), 30)
-    data$train_data <- data$train_data[indices, ]
-    data$train_labels <- data$train_labels[indices]
-    data$train_original_labels <- data$train_original_labels[indices]
-  }
+  # Use all available data (no artificial limits)
   
   # Print data summary
   cat("Training data shape:", nrow(data$train_data), "x", ncol(data$train_data), "\n")
@@ -658,10 +681,10 @@ main <- function() {
                                        "Phoneme Dataset - Before Clustering")
   
   # Save original data plot
-  pdf("../plots/phoneme/phoneme_imbalanced_original_data.pdf", width = 12, height = 8)
+  pdf("../../plots/phoneme/phoneme_imbalanced_original_data.pdf", width = 12, height = 8)
   print(original_plot)
   dev.off()
-  cat("Imbalanced original data plot saved to ../plots/phoneme/phoneme_imbalanced_original_data.pdf\n")
+  cat("Imbalanced original data plot saved to ../../plots/phoneme/phoneme_imbalanced_original_data.pdf\n")
   
   # Run analysis on raw curves
   cat("\n3. Analyzing raw curves data...\n")
@@ -680,10 +703,10 @@ main <- function() {
     "Phoneme Dataset - After Clustering"
   )
   
-  pdf("../plots/phoneme/phoneme_raw_curves_clustering.pdf", width = 12, height = 8)
+  pdf("../../plots/phoneme/phoneme_raw_curves_clustering.pdf", width = 12, height = 8)
   print(raw_clustering_plot)
   dev.off()
-  cat("Raw curves clustering plot saved to ../plots/phoneme/phoneme_raw_curves_clustering.pdf\n")
+  cat("Raw curves clustering plot saved to ../../plots/phoneme/phoneme_raw_curves_clustering.pdf\n")
   
   # Run analysis on derivatives
   cat("\n4. Analyzing derivative data...\n")
@@ -705,10 +728,10 @@ main <- function() {
     "Phoneme Dataset - After Clustering"
   )
   
-  pdf("../plots/phoneme/phoneme_derivatives_clustering.pdf", width = 12, height = 8)
+  pdf("../../plots/phoneme/phoneme_derivatives_clustering.pdf", width = 12, height = 8)
   print(deriv_clustering_plot)
   dev.off()
-  cat("Derivatives clustering plot saved to ../plots/phoneme/phoneme_derivatives_clustering.pdf\n")
+  cat("Derivatives clustering plot saved to ../../plots/phoneme/phoneme_derivatives_clustering.pdf\n")
   
   # Run analysis on FPCA data
   cat("\n5. Analyzing FPCA data...\n")
@@ -729,18 +752,18 @@ main <- function() {
     "Phoneme Dataset - After Clustering"
   )
   
-  pdf("../plots/phoneme/phoneme_fpca_clustering.pdf", width = 12, height = 8)
+  pdf("../../plots/phoneme/phoneme_fpca_clustering.pdf", width = 12, height = 8)
   print(fpca_clustering_plot)
   dev.off()
-  cat("FPCA clustering plot saved to ../plots/phoneme/phoneme_fpca_clustering.pdf\n")
+  cat("FPCA clustering plot saved to ../../plots/phoneme/phoneme_fpca_clustering.pdf\n")
   
   # Print final summary
   cat("\n=== Imbalanced Analysis Complete ===\n")
   cat("Generated files:\n")
-  cat("- ../plots/phoneme/phoneme_imbalanced_original_data.pdf: Imbalanced curves (5% anomaly, overlapped)\n")
-  cat("- ../plots/phoneme/phoneme_raw_curves_clustering.pdf: Raw curves clustering results\n")
-  cat("- ../plots/phoneme/phoneme_derivatives_clustering.pdf: Derivatives clustering results\n")
-  cat("- ../plots/phoneme/phoneme_fpca_clustering.pdf: FPCA clustering results\n")
+  cat("- ../../plots/phoneme/phoneme_imbalanced_original_data.pdf: Imbalanced curves (5% anomaly, overlapped)\n")
+  cat("- ../../plots/phoneme/phoneme_raw_curves_clustering.pdf: Raw curves clustering results\n")
+  cat("- ../../plots/phoneme/phoneme_derivatives_clustering.pdf: Derivatives clustering results\n")
+  cat("- ../../plots/phoneme/phoneme_fpca_clustering.pdf: FPCA clustering results\n")
   
   cat("\nPerformance Comparison:\n")
   cat("Raw Curves - Precision:", round(raw_results$metrics$Macro_Precision, 4), 
