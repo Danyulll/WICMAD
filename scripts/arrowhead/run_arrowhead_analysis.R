@@ -507,14 +507,14 @@ main <- function() {
   cat("=== ArrowHead Dataset Analysis with WICMAD ===\n\n")
   
   # Ensure output directory exists
-  output_dir <- "./plots/arrowhead"
+  output_dir <- "../../plots/arrowhead"
   if (!dir.exists(output_dir)) {
     dir.create(output_dir, recursive = TRUE)
     cat("Created output directory:", output_dir, "\n")
   }
   
   # Set data directory
-  data_dir <- "./data/ArrowHead"
+  data_dir <- "../../data/ArrowHead"
   
   # Load data
   cat("1. Loading ArrowHead dataset...\n")
@@ -539,7 +539,7 @@ main <- function() {
   cat("Plot object created successfully\n")
   
   # Save original data plot
-  plot_path <- "./plots/arrowhead/arrowhead_original_data.pdf"
+  plot_path <- "../../plots/arrowhead/arrowhead_original_data.pdf"
   cat("Attempting to save plot to:", plot_path, "\n")
   cat("Current working directory:", getwd(), "\n")
   
@@ -627,7 +627,7 @@ main <- function() {
   )
   
   # Save clustering results plot
-  clustering_plot_path <- "./plots/arrowhead/arrowhead_clustering_results.pdf"
+  clustering_plot_path <- "../../plots/arrowhead/arrowhead_clustering_results.pdf"
   cat("Attempting to save clustering plot to:", clustering_plot_path, "\n")
   
   pdf(clustering_plot_path, width = 12, height = 8)
@@ -707,7 +707,7 @@ main <- function() {
   )
   
   # Save derivative clustering results plot
-  deriv_clustering_plot_path <- "./plots/arrowhead/arrowhead_derivatives_clustering.pdf"
+  deriv_clustering_plot_path <- "../../plots/arrowhead/arrowhead_derivatives_clustering.pdf"
   cat("Attempting to save derivative clustering plot to:", deriv_clustering_plot_path, "\n")
   
   pdf(deriv_clustering_plot_path, width = 12, height = 8)
@@ -724,9 +724,9 @@ main <- function() {
   # Print final summary
   cat("\n=== Analysis Complete ===\n")
   cat("Generated files:\n")
-  cat("- ./plots/arrowhead/arrowhead_original_data.pdf: Original time series (overlapped)\n")
-  cat("- ./plots/arrowhead/arrowhead_clustering_results.pdf: Clustered time series\n")
-  cat("- ./plots/arrowhead/arrowhead_derivatives_clustering.pdf: Derivative clustering results\n")
+  cat("- ../../plots/arrowhead/arrowhead_original_data.pdf: Original time series (overlapped)\n")
+  cat("- ../../plots/arrowhead/arrowhead_clustering_results.pdf: Clustered time series\n")
+  cat("- ../../plots/arrowhead/arrowhead_derivatives_clustering.pdf: Derivative clustering results\n")
   
   cat("\nPerformance Comparison:\n")
   cat("Raw Signal - Precision:", round(metrics$Macro_Precision, 4), 
