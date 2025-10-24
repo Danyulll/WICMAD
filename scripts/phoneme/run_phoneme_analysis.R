@@ -21,7 +21,7 @@ library(devtools)
 devtools::load_all()
 
 # Function to load phoneme dataset and create imbalanced data
-load_phoneme_data <- function(imbalance_ratio = 0.05) {
+load_phoneme_data <- function(imbalance_ratio = 0.10) {
   cat("Loading phoneme dataset...\n")
   
   # Load the phoneme data
@@ -59,7 +59,7 @@ load_phoneme_data <- function(imbalance_ratio = 0.05) {
   cat("Normal (majority class):", sum(binary_labels == 0), "\n")
   cat("Anomaly (other classes):", sum(binary_labels == 1), "\n")
   
-  # Create imbalanced dataset with approximately 5% anomalies
+  # Create imbalanced dataset with approximately 10% anomalies
   normal_indices <- which(binary_labels == 0)
   anomaly_indices <- which(binary_labels == 1)
   
@@ -67,12 +67,12 @@ load_phoneme_data <- function(imbalance_ratio = 0.05) {
   selected_normal <- normal_indices
   n_normal_used <- length(selected_normal)
   
-  # Calculate how many anomalies we need for 5% of the total dataset
+  # Calculate how many anomalies we need for 10% of the total dataset
   # Total dataset will be: n_normal_used + n_anomalies_needed
-  # We want: n_anomalies_needed / (n_normal_used + n_anomalies_needed) = 0.05
-  # Solving: n_anomalies_needed = 0.05 * (n_normal_used + n_anomalies_needed)
-  # n_anomalies_needed = 0.05 * n_normal_used / (1 - 0.05) = 0.05 * n_normal_used / 0.95
-  n_anomalies_needed <- max(1, round(0.05 * n_normal_used / 0.95))
+  # We want: n_anomalies_needed / (n_normal_used + n_anomalies_needed) = 0.10
+  # Solving: n_anomalies_needed = 0.10 * (n_normal_used + n_anomalies_needed)
+  # n_anomalies_needed = 0.10 * n_normal_used / (1 - 0.10) = 0.10 * n_normal_used / 0.90
+  n_anomalies_needed <- max(1, round(0.10 * n_normal_used / 0.90))
   
   # Ensure we don't exceed available anomaly samples
   n_anomalies_needed <- min(n_anomalies_needed, length(anomaly_indices))
@@ -662,9 +662,9 @@ main <- function() {
   output_dir <- "../../plots/phoneme"
   dir.create(output_dir, recursive = TRUE)
   
-  # Load data with 5% anomaly class
-  cat("1. Loading phoneme dataset with 5% anomaly class...\n")
-  data <- load_phoneme_data(imbalance_ratio = 0.05)
+  # Load data with 10% anomaly class
+  cat("1. Loading phoneme dataset with 10% anomaly class...\n")
+  data <- load_phoneme_data(imbalance_ratio = 0.10)
   
   # Use all available data (no artificial limits)
   
@@ -760,7 +760,7 @@ main <- function() {
   # Print final summary
   cat("\n=== Imbalanced Analysis Complete ===\n")
   cat("Generated files:\n")
-  cat("- ../../plots/phoneme/phoneme_imbalanced_original_data.pdf: Imbalanced curves (5% anomaly, overlapped)\n")
+  cat("- ../../plots/phoneme/phoneme_imbalanced_original_data.pdf: Imbalanced curves (10% anomaly, overlapped)\n")
   cat("- ../../plots/phoneme/phoneme_raw_curves_clustering.pdf: Raw curves clustering results\n")
   cat("- ../../plots/phoneme/phoneme_derivatives_clustering.pdf: Derivatives clustering results\n")
   cat("- ../../plots/phoneme/phoneme_fpca_clustering.pdf: FPCA clustering results\n")

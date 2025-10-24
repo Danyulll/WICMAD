@@ -164,7 +164,7 @@ make_univariate_dataset <- function(N = 40L, anomaly_type = c("isolated","mag1",
   anomaly_type <- match.arg(anomaly_type)
   X <- gp_draw_matrix(N, t, mean_fun, k_qp, sigma_noise)  # N x P
   y_true <- rep(0L, N)
-  n_anom <- max(1L, round(0.05 * N))   # 5%
+  n_anom <- max(1L, round(0.10 * N))   # 10%
   idx_anom <- sample.int(N, n_anom)
 
   X_pert <- X
@@ -203,7 +203,7 @@ make_multivariate_dataset <- function(N = 40L, regime = c("one","two","three"),
   }
 
   y_true <- rep(0L, N)
-  n_anom <- max(1L, round(0.05 * N))
+  n_anom <- max(1L, round(0.10 * N))
   idx_anom <- sample.int(N, n_anom)
   y_true[idx_anom] <- 1L
 

@@ -18,7 +18,7 @@ library(devtools)
 devtools::load_all()
 
 # Function to load coffee dataset and create imbalanced data
-load_coffee_data <- function(data_dir, imbalance_ratio = 0.05) {
+load_coffee_data <- function(data_dir, imbalance_ratio = 0.10) {
   cat("Loading coffee dataset...\n")
   
   # Load training data
@@ -56,11 +56,11 @@ load_coffee_data <- function(data_dir, imbalance_ratio = 0.05) {
   cat("Original class distribution:\n")
   print(table(all_labels))
   
-  # Create imbalanced dataset with 5% anomalies
+  # Create imbalanced dataset with 10% anomalies
   normal_indices <- which(all_labels == 0)
   anomaly_indices <- which(all_labels == 1)
   
-  # Calculate how many anomalies we need for 5% of total
+  # Calculate how many anomalies we need for 10% of total
   total_samples <- length(all_labels)
   n_anomalies_needed <- max(1, round(total_samples * imbalance_ratio))
   n_normal_needed <- total_samples - n_anomalies_needed
@@ -650,11 +650,11 @@ main <- function() {
   # Set data directory
   data_dir <- "../../data/Coffee"
   
-  # Load data with 5% anomaly class
-  cat("1. Loading coffee dataset with 5% anomaly class...\n")
-  data <- load_coffee_data(data_dir, imbalance_ratio = 0.05)
+  # Load data with 10% anomaly class
+  cat("1. Loading coffee dataset with 10% anomaly class...\n")
+  data <- load_coffee_data(data_dir, imbalance_ratio = 0.10)
   
-  # Use all observations in the normal class, then make final dataset 5% anomalies
+  # Use all observations in the normal class, then make final dataset 10% anomalies
   # (This is already handled in the load_coffee_data function)
   
   # Print data summary
@@ -747,7 +747,7 @@ main <- function() {
   # Print final summary
   cat("\n=== Imbalanced Analysis Complete ===\n")
   cat("Generated files:\n")
-  cat("- ../../plots/coffee/coffee_imbalanced_original_data.pdf: Imbalanced time series (5% anomaly, overlapped)\n")
+  cat("- ../../plots/coffee/coffee_imbalanced_original_data.pdf: Imbalanced time series (10% anomaly, overlapped)\n")
   cat("- ../../plots/coffee/coffee_raw_signal_clustering.pdf: Raw signal clustering results\n")
   cat("- ../../plots/coffee/coffee_derivatives_clustering.pdf: Derivatives clustering results\n")
   cat("- ../../plots/coffee/coffee_fpca_clustering.pdf: FPCA clustering results\n")

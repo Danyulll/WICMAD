@@ -139,7 +139,7 @@ load_basicmotions_data <- function(data_dir, reveal_ratio = 0.15) {
   # Convert to anomaly detection format (majority class = normal, others = anomaly)
   anomaly_labels <- ifelse(all_labels == majority_class, 0, 1)
   
-  # Create imbalanced dataset with approximately 5% anomalies
+  # Create imbalanced dataset with approximately 10% anomalies
   normal_indices <- which(anomaly_labels == 0)
   anomaly_indices <- which(anomaly_labels == 1)
   
@@ -147,12 +147,12 @@ load_basicmotions_data <- function(data_dir, reveal_ratio = 0.15) {
   selected_normal <- normal_indices
   n_normal_used <- length(selected_normal)
   
-  # Calculate how many anomalies we need for 5% of the total dataset
+  # Calculate how many anomalies we need for 10% of the total dataset
   # Total dataset will be: n_normal_used + n_anomalies_needed
-  # We want: n_anomalies_needed / (n_normal_used + n_anomalies_needed) = 0.05
-  # Solving: n_anomalies_needed = 0.05 * (n_normal_used + n_anomalies_needed)
-  # n_anomalies_needed = 0.05 * n_normal_used / (1 - 0.05) = 0.05 * n_normal_used / 0.95
-  n_anomalies_needed <- max(1, round(0.05 * n_normal_used / 0.95))
+  # We want: n_anomalies_needed / (n_normal_used + n_anomalies_needed) = 0.10
+  # Solving: n_anomalies_needed = 0.10 * (n_normal_used + n_anomalies_needed)
+  # n_anomalies_needed = 0.10 * n_normal_used / (1 - 0.10) = 0.10 * n_normal_used / 0.90
+  n_anomalies_needed <- max(1, round(0.10 * n_normal_used / 0.90))
   
   # Ensure we don't exceed available anomaly samples
   n_anomalies_needed <- min(n_anomalies_needed, length(anomaly_indices))
@@ -177,7 +177,7 @@ load_basicmotions_data <- function(data_dir, reveal_ratio = 0.15) {
   cat("Normal (Class", majority_class, "):", sum(imbalanced_labels == 0), "\n")
   cat("Anomaly (Classes", paste(minority_classes, collapse = ", "), "):", sum(imbalanced_labels == 1), "\n")
   cat("Anomaly percentage:", round(mean(imbalanced_labels == 1) * 100, 1), "%\n")
-  cat("Target anomaly percentage: 5.0%\n")
+  cat("Target anomaly percentage: 10.0%\n")
   cat("Available normal samples used:", n_normal_used, "\n")
   cat("Available anomaly samples used:", n_anomalies_needed, "out of", length(anomaly_indices), "\n")
   
@@ -399,7 +399,7 @@ main <- function() {
   cat("1. Loading BasicMotions dataset...\n")
   data <- load_basicmotions_data(data_dir, reveal_ratio = 0.15)
   
-  # Use all observations in the normal class, then make final dataset 5% anomalies
+  # Use all observations in the normal class, then make final dataset 10% anomalies
   # (This is already handled in the load_basicmotions_data function)
   
   # Print data summary

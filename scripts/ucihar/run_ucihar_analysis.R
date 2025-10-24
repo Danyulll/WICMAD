@@ -108,7 +108,7 @@ load_ucihar_data <- function(data_dir) {
   # Convert to anomaly detection format (majority class = normal, others = anomaly)
   anomaly_labels <- ifelse(all_labels == majority_class, 0, 1)
   
-  # Create imbalanced dataset with approximately 5% anomalies
+  # Create imbalanced dataset with approximately 10% anomalies
   normal_indices <- which(anomaly_labels == 0)
   anomaly_indices <- which(anomaly_labels == 1)
   
@@ -116,12 +116,12 @@ load_ucihar_data <- function(data_dir) {
   selected_normal <- normal_indices
   n_normal_used <- length(selected_normal)
   
-  # Calculate how many anomalies we need for 5% of the total dataset
+  # Calculate how many anomalies we need for 10% of the total dataset
   # Total dataset will be: n_normal_used + n_anomalies_needed
-  # We want: n_anomalies_needed / (n_normal_used + n_anomalies_needed) = 0.05
-  # Solving: n_anomalies_needed = 0.05 * (n_normal_used + n_anomalies_needed)
-  # n_anomalies_needed = 0.05 * n_normal_used / (1 - 0.05) = 0.05 * n_normal_used / 0.95
-  n_anomalies_needed <- max(1, round(0.05 * n_normal_used / 0.95))
+  # We want: n_anomalies_needed / (n_normal_used + n_anomalies_needed) = 0.10
+  # Solving: n_anomalies_needed = 0.10 * (n_normal_used + n_anomalies_needed)
+  # n_anomalies_needed = 0.10 * n_normal_used / (1 - 0.10) = 0.10 * n_normal_used / 0.90
+  n_anomalies_needed <- max(1, round(0.10 * n_normal_used / 0.90))
   
   # Ensure we don't exceed available anomaly samples
   n_anomalies_needed <- min(n_anomalies_needed, length(anomaly_indices))
@@ -399,7 +399,7 @@ main <- function() {
   dir.create(output_dir, recursive = TRUE)
   
   # Load data
-  cat("\n1. Loading UCI HAR dataset with 5% anomaly class...\n")
+  cat("\n1. Loading UCI HAR dataset with 10% anomaly class...\n")
   data <- load_ucihar_data(data_dir = "../../data")
   
   # Create original data visualization

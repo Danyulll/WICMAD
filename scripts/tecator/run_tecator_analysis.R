@@ -20,7 +20,7 @@ library(devtools)
 devtools::load_all()
 
 # Function to load Tecator dataset and create imbalanced data
-load_tecator_data <- function(imbalance_ratio = 0.05) {
+load_tecator_data <- function(imbalance_ratio = 0.10) {
   cat("Loading Tecator dataset...\n")
   
   # Load the Tecator data
@@ -56,8 +56,8 @@ load_tecator_data <- function(imbalance_ratio = 0.05) {
   cat("High fat samples:", sum(labels == 1), "\n")
   cat("Fat threshold:", round(fat_threshold, 2), "\n")
   
-  # Create imbalanced dataset with approximately 5% anomalies
-  cat("Creating imbalanced dataset with 5% anomalies...\n")
+  # Create imbalanced dataset with approximately 10% anomalies
+  cat("Creating imbalanced dataset with 10% anomalies...\n")
   
   # Identify majority and minority classes
   class_counts <- table(labels)
@@ -77,12 +77,12 @@ load_tecator_data <- function(imbalance_ratio = 0.05) {
   selected_normal <- normal_indices
   n_normal_used <- length(selected_normal)
   
-  # Calculate how many anomalies we need for 5% of the total dataset
+  # Calculate how many anomalies we need for 10% of the total dataset
   # Total dataset will be: n_normal_used + n_anomalies_needed
-  # We want: n_anomalies_needed / (n_normal_used + n_anomalies_needed) = 0.05
-  # Solving: n_anomalies_needed = 0.05 * (n_normal_used + n_anomalies_needed)
-  # n_anomalies_needed = 0.05 * n_normal_used / (1 - 0.05) = 0.05 * n_normal_used / 0.95
-  n_anomalies_needed <- max(1, round(0.05 * n_normal_used / 0.95))
+  # We want: n_anomalies_needed / (n_normal_used + n_anomalies_needed) = 0.10
+  # Solving: n_anomalies_needed = 0.10 * (n_normal_used + n_anomalies_needed)
+  # n_anomalies_needed = 0.10 * n_normal_used / (1 - 0.10) = 0.10 * n_normal_used / 0.90
+  n_anomalies_needed <- max(1, round(0.10 * n_normal_used / 0.90))
   
   # Ensure we don't exceed available anomaly samples
   n_anomalies_needed <- min(n_anomalies_needed, length(anomaly_indices))
@@ -651,9 +651,9 @@ main <- function() {
   output_dir <- "../../plots/tecator"
   dir.create(output_dir, recursive = TRUE)
   
-  # Load data with 5% high fat class
-  cat("1. Loading Tecator dataset with 5% high fat class...\n")
-  data <- load_tecator_data(imbalance_ratio = 0.05)
+  # Load data with 10% high fat class
+  cat("1. Loading Tecator dataset with 10% high fat class...\n")
+  data <- load_tecator_data(imbalance_ratio = 0.10)
   
   # Get the calculated target dimension
   target_dim <- data$target_dim
@@ -754,7 +754,7 @@ main <- function() {
   # Print final summary
   cat("\n=== Imbalanced Analysis Complete ===\n")
   cat("Generated files:\n")
-  cat("- ../../plots/tecator/tecator_imbalanced_original_data.pdf: Imbalanced spectra (5% high fat, overlapped)\n")
+  cat("- ../../plots/tecator/tecator_imbalanced_original_data.pdf: Imbalanced spectra (10% high fat, overlapped)\n")
   cat("- ../../plots/tecator/tecator_raw_spectra_clustering.pdf: Raw spectra clustering results\n")
   cat("- ../../plots/tecator/tecator_derivatives_clustering.pdf: Derivatives clustering results\n")
   cat("- ../../plots/tecator/tecator_fpca_clustering.pdf: FPCA clustering results\n")

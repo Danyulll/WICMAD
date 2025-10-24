@@ -54,7 +54,7 @@ load_ptb_data <- function(data_dir, reveal_ratio = 0.15) {
     }
   }
   
-  # Create imbalanced dataset with approximately 5% anomalies
+  # Create imbalanced dataset with approximately 10% anomalies
   normal_indices <- which(labels == 0)
   anomaly_indices <- which(labels == 1)
   
@@ -62,12 +62,12 @@ load_ptb_data <- function(data_dir, reveal_ratio = 0.15) {
   selected_normal <- normal_indices
   n_normal_used <- length(selected_normal)
   
-  # Calculate how many anomalies we need for 5% of the total dataset
+  # Calculate how many anomalies we need for 10% of the total dataset
   # Total dataset will be: n_normal_used + n_anomalies_needed
-  # We want: n_anomalies_needed / (n_normal_used + n_anomalies_needed) = 0.05
-  # Solving: n_anomalies_needed = 0.05 * (n_normal_used + n_anomalies_needed)
-  # n_anomalies_needed = 0.05 * n_normal_used / (1 - 0.05) = 0.05 * n_normal_used / 0.95
-  n_anomalies_needed <- max(1, round(0.05 * n_normal_used / 0.95))
+  # We want: n_anomalies_needed / (n_normal_used + n_anomalies_needed) = 0.10
+  # Solving: n_anomalies_needed = 0.10 * (n_normal_used + n_anomalies_needed)
+  # n_anomalies_needed = 0.10 * n_normal_used / (1 - 0.10) = 0.10 * n_normal_used / 0.90
+  n_anomalies_needed <- max(1, round(0.10 * n_normal_used / 0.90))
   
   # Ensure we don't exceed available anomaly samples
   n_anomalies_needed <- min(n_anomalies_needed, length(anomaly_indices))
@@ -497,7 +497,7 @@ main <- function() {
   cat("1. Loading PTB dataset...\n")
   data <- load_ptb_data(data_dir, reveal_ratio = 0.15)
   
-  # Use all available data (up to 1000 samples with 5% anomalies)
+  # Use all available data (up to 1000 samples with 10% anomalies)
   
   # Print data summary
   cat("Training data: ", length(data$train_series), " series\n")
@@ -508,15 +508,15 @@ main <- function() {
   # Plot original data (overlapped) - subsample for visualization
   cat("\n2. Creating original data visualization...\n")
   
-  # Create a subsample of 100 curves for plotting (maintain 5% anomaly ratio)
+  # Create a subsample of 100 curves for plotting (maintain 10% anomaly ratio)
   n_plot_samples <- min(100, length(data$train_series))
   
   # Find normal and abnormal indices
   normal_indices <- which(data$train_labels == 0)
   abnormal_indices <- which(data$train_labels == 1)
   
-  # Calculate how many anomalies we need for 5% of the plot sample
-  n_plot_anomalies <- max(1, round(0.05 * n_plot_samples))
+  # Calculate how many anomalies we need for 10% of the plot sample
+  n_plot_anomalies <- max(1, round(0.10 * n_plot_samples))
   n_plot_normal <- n_plot_samples - n_plot_anomalies
   
   # Sample for plotting
