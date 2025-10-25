@@ -52,7 +52,7 @@ function make_bias_variant(kcfg::KernelConfig)
     end
     pstar = function()
         base = kcfg.pstar()
-        base[:s0] = exp(rand(Normal(-3, 0.75)))
+        base[:s0] = exp(Base.rand(Normal(-3, 0.75)))
         base
     end
     prop_sd = copy(kcfg.prop_sd)
@@ -67,7 +67,7 @@ function make_kernels(; add_bias_variants::Bool = true)
             (t, par) -> k_sqexp(t, par[:l_scale]),
             [:l_scale],
             par -> logpdf(Gamma(2, 1 / 2), par[:l_scale]),
-            () -> Dict(:l_scale => rand(Gamma(2, 1 / 2))),
+            () -> Dict(:l_scale => Base.rand(Gamma(2, 1 / 2))),
             Dict(:l_scale => 0.20),
         ),
         KernelConfig(
@@ -75,7 +75,7 @@ function make_kernels(; add_bias_variants::Bool = true)
             (t, par) -> k_mat32(t, par[:l_scale]),
             [:l_scale],
             par -> logpdf(Gamma(2, 1 / 2), par[:l_scale]),
-            () -> Dict(:l_scale => rand(Gamma(2, 1 / 2))),
+            () -> Dict(:l_scale => Base.rand(Gamma(2, 1 / 2))),
             Dict(:l_scale => 0.20),
         ),
         KernelConfig(
@@ -83,7 +83,7 @@ function make_kernels(; add_bias_variants::Bool = true)
             (t, par) -> k_mat52(t, par[:l_scale]),
             [:l_scale],
             par -> logpdf(Gamma(2, 1 / 2), par[:l_scale]),
-            () -> Dict(:l_scale => rand(Gamma(2, 1 / 2))),
+            () -> Dict(:l_scale => Base.rand(Gamma(2, 1 / 2))),
             Dict(:l_scale => 0.20),
         ),
         KernelConfig(
@@ -91,7 +91,7 @@ function make_kernels(; add_bias_variants::Bool = true)
             (t, par) -> k_periodic(t, par[:l_scale], par[:period]),
             [:l_scale, :period],
             par -> logpdf(Gamma(3, 1 / 2), par[:l_scale]) + logpdf(Beta(5, 5), par[:period]),
-            () -> Dict(:l_scale => rand(Gamma(3, 1 / 2)), :period => rand(Beta(5, 5))),
+            () -> Dict(:l_scale => Base.rand(Gamma(3, 1 / 2)), :period => Base.rand(Beta(5, 5))),
             Dict(:l_scale => 0.20, :period => 0.20),
         ),
     ]

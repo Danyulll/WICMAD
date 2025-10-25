@@ -5,7 +5,6 @@ using ..Kernels
 using ..ICMCache
 using ..Init
 using LinearAlgebra
-using Random
 using Distributions
 using StatsBase
 
@@ -33,7 +32,7 @@ function mh_update_kernel_eig(k::Int, params::Vector{ClusterParams}, kernels::Ve
         cur = kp[pn]
         if pn == :period
             z_cur = Utils.logit_safe(cur)
-            z_prp = rand(Normal(z_cur, kc.prop_sd[pn]))
+            z_prp = Base.rand(Normal(z_cur, kc.prop_sd[pn]))
             prp = Utils.invlogit_safe(z_prp)
             kp_prop = clone_dict(kp); kp_prop[pn] = prp
             cache_cur = build_icm_cache(t, kc, kp, cp.L, cp.eta, cp.tau_B, cp.cache)
@@ -43,7 +42,7 @@ function mh_update_kernel_eig(k::Int, params::Vector{ClusterParams}, kernels::Ve
             lp_cur = kc.prior(kp)
             lp_prp = kc.prior(kp_prop)
             a = (ll_prp + lp_prp) - (ll_cur + lp_cur)
-            if isfinite(a) && log(rand()) < a
+            if isfinite(a) && log(Base.rand()) < a
                 cp.thetas[cp.kern_idx] = kp_prop
                 cp.cache = cache_prp
                 acc = cp.acc.kernel[pn]
@@ -52,7 +51,7 @@ function mh_update_kernel_eig(k::Int, params::Vector{ClusterParams}, kernels::Ve
             cp.acc.kernel[pn].n += 1
             kp = clone_dict(cp.thetas[cp.kern_idx])
         else
-            prp = rand(LogNormal(log(cur), kc.prop_sd[pn]))
+            prp = Base.rand(LogNormal(log(cur), kc.prop_sd[pn]))
             kp_prop = clone_dict(kp); kp_prop[pn] = prp
             cache_cur = build_icm_cache(t, kc, kp, cp.L, cp.eta, cp.tau_B, cp.cache)
             ll_cur = sum_ll_curves(curves, cache_cur)
@@ -63,7 +62,7 @@ function mh_update_kernel_eig(k::Int, params::Vector{ClusterParams}, kernels::Ve
             q_cgpr = logpdf(LogNormal(log(prp), kc.prop_sd[pn]), cur)
             q_prgc = logpdf(LogNormal(log(cur), kc.prop_sd[pn]), prp)
             a = (ll_prp + lp_prp + q_cgpr) - (ll_cur + lp_cur + q_prgc)
-            if isfinite(a) && log(rand()) < a
+            if isfinite(a) && log(Base.rand()) < a
                 cp.thetas[cp.kern_idx] = kp_prop
                 cp.cache = cache_prp
                 cp.acc.kernel[pn].a += 1
@@ -79,7 +78,7 @@ end
 function mh_update_L_eig(k::Int, params::Vector{ClusterParams}, kernels::Vector{KernelConfig}, t, Y_list, mh_step_L::Float64)
     cp = params[k]
     th = Utils.pack_L(cp.L)
-    thp = th .+ rand(Normal(0, mh_step_L), length(th))
+    thp = th .+ Base.rand(Normal(0, mh_step_L), length(th))
     Lp = Utils.unpack_L(thp, size(cp.L, 1))
     curves = [Matrix{Float64}(Yi - cp.mu_cached) for Yi in Y_list]
     kc = kernels[cp.kern_idx]; kp = cp.thetas[cp.kern_idx]
@@ -90,7 +89,7 @@ function mh_update_L_eig(k::Int, params::Vector{ClusterParams}, kernels::Vector{
     lp_cur = sum(logpdf(Normal(0, 1), th))
     lp_prp = sum(logpdf(Normal(0, 1), thp))
     a = (ll_prp + lp_prp) - (ll_cur + lp_cur)
-    if isfinite(a) && log(rand()) < a
+    if isfinite(a) && log(Base.rand()) < a
         cp.L = Lp
         cp.cache = cache_prp
         cp.acc.L.a += 1
@@ -106,7 +105,7 @@ function mh_update_eta_eig(k::Int, params::Vector{ClusterParams}, kernels::Vecto
     kc = kernels[cp.kern_idx]; kp = cp.thetas[cp.kern_idx]
     for j in eachindex(cp.eta)
         cur = cp.eta[j]
-        prp = rand(LogNormal(log(cur), mh_step_eta))
+        prp = Base.rand(LogNormal(log(cur), mh_step_eta))
         etap = copy(cp.eta); etap[j] = prp
         cache_cur = build_icm_cache(t, kc, kp, cp.L, cp.eta, cp.tau_B, cp.cache)
         cache_prp = build_icm_cache(t, kc, kp, cp.L, etap, cp.tau_B, ICMCacheState())
@@ -118,7 +117,7 @@ function mh_update_eta_eig(k::Int, params::Vector{ClusterParams}, kernels::Vecto
         q_cgpr = logpdf(LogNormal(log(prp), mh_step_eta), cur)
         q_prgc = logpdf(LogNormal(log(cur), mh_step_eta), prp)
         a = (ll_prp + lp_prp + q_cgpr) - (ll_cur + lp_cur + q_prgc)
-        if isfinite(a) && log(rand()) < a
+        if isfinite(a) && log(Base.rand()) < a
             cp.eta = etap
             cp.cache = cache_prp
             cp.acc.eta[j].a += 1
@@ -134,7 +133,7 @@ function mh_update_tauB_eig(k::Int, params::Vector{ClusterParams}, kernels::Vect
     curves = [Matrix{Float64}(Yi - cp.mu_cached) for Yi in Y_list]
     kc = kernels[cp.kern_idx]; kp = cp.thetas[cp.kern_idx]
     cur = cp.tau_B
-    prp = rand(LogNormal(log(cur), mh_step_tauB))
+    prp = Base.rand(LogNormal(log(cur), mh_step_tauB))
     cache_cur = build_icm_cache(t, kc, kp, cp.L, cp.eta, cur, cp.cache)
     cache_prp = build_icm_cache(t, kc, kp, cp.L, cp.eta, prp, ICMCacheState())
     ll_cur = sum_ll_curves(curves, cache_cur)
@@ -144,7 +143,7 @@ function mh_update_tauB_eig(k::Int, params::Vector{ClusterParams}, kernels::Vect
     q_cgpr = logpdf(LogNormal(log(prp), mh_step_tauB), cur)
     q_prgc = logpdf(LogNormal(log(cur), mh_step_tauB), prp)
     a = (ll_prp + lp_prp + q_cgpr) - (ll_cur + lp_cur + q_prgc)
-    if isfinite(a) && log(rand()) < a
+    if isfinite(a) && log(Base.rand()) < a
         cp.tau_B = prp
         cp.cache = cache_prp
         cp.acc.tauB.a += 1

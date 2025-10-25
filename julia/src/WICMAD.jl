@@ -19,7 +19,6 @@ using .WaveletBlock
 using .PostProcessing
 
 using LinearAlgebra
-using Random
 using Distributions
 using StatsBase
 using StatsFuns
@@ -112,15 +111,15 @@ function wicmad(
     t_scaled = Utils.scale_t01(t_norm)
 
     kernels = make_kernels(add_bias_variants = !mean_intercept)
-    alpha = rand(Gamma(alpha_prior[1], 1 / alpha_prior[2]))
-    v = [rand(Beta(1, alpha)) for _ in 1:K_init]
+    alpha = Base.rand(Gamma(alpha_prior[1], 1 / alpha_prior[2]))
+    v = [Base.rand(Beta(1, alpha)) for _ in 1:K_init]
     params = ClusterParams[]
     for _ in 1:length(v)
         cp = draw_new_cluster_params(M, P, t_scaled, kernels; wf = wf, J = Jv, boundary = boundary)
         push!(params, ensure_complete_cache!(cp, kernels, t_scaled, M))
     end
 
-    z = [rand(1:length(v)) for _ in 1:N]
+    z = [Base.rand(1:length(v)) for _ in 1:N]
     if !isempty(revealed_idx)
         for idx in revealed_idx
             if 1 <= idx <= N
@@ -176,7 +175,7 @@ function wicmad(
                 bias_cur[m] = 0.0
             else
                 post_mean = (resid_sum / eta_m) / post_prec
-                bias_cur[m] = rand(Normal(post_mean, sqrt(1 / post_prec)))
+                bias_cur[m] = Base.rand(Normal(post_mean, sqrt(1 / post_prec)))
             end
         end
         bias_cur
@@ -205,7 +204,7 @@ function wicmad(
 
     for iter in 1:n_iter
         pi = Utils.stick_to_pi(v)
-        u = [rand(Uniform(0, pi[z[i]])) for i in 1:N]
+        u = [Base.rand(Uniform(0, pi[z[i]])) for i in 1:N]
         u_star = minimum(u)
         v = Utils.extend_sticks_until(v, alpha, u_star)
         pi = Utils.stick_to_pi(v)
@@ -280,12 +279,12 @@ function wicmad(
             diag[:global][:K_occ_all][iter] = Kocc
         end
 
-        eta_aux = rand(Beta(alpha + 1, N))
+        eta_aux = Base.rand(Beta(alpha + 1, N))
         mix = (alpha_prior[1] + Kocc - 1) / (N * (alpha_prior[2] - log(eta_aux)) + alpha_prior[1] + Kocc - 1)
-        if rand() < mix
-            alpha = rand(Gamma(alpha_prior[1] + Kocc, 1 / (alpha_prior[2] - log(eta_aux))))
+        if Base.rand() < mix
+            alpha = Base.rand(Gamma(alpha_prior[1] + Kocc, 1 / (alpha_prior[2] - log(eta_aux))))
         else
-            alpha = rand(Gamma(alpha_prior[1] + Kocc - 1, 1 / (alpha_prior[2] - log(eta_aux))))
+            alpha = Base.rand(Gamma(alpha_prior[1] + Kocc - 1, 1 / (alpha_prior[2] - log(eta_aux))))
         end
 
         if keep > 0 && iter > burn && ((iter - burn) % thin == 0)

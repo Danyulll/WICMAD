@@ -4,14 +4,13 @@ using ..Utils
 using ..WaveletOps
 using ..Init
 using Distributions
-using Random
 using StatsFuns: logistic
 
 export update_cluster_wavelet_params_besov
 
 function ensure_gamma_length!(wpar::WaveletParams, ncoeff::Int, M::Int)
     if length(wpar.gamma_ch) != M || any(length(g) != ncoeff for g in wpar.gamma_ch)
-        wpar.gamma_ch = [Int.(rand(Bernoulli(0.2), ncoeff)) for _ in 1:M]
+        wpar.gamma_ch = [Int.(Base.rand(Bernoulli(0.2), ncoeff)) for _ in 1:M]
     end
 end
 
@@ -61,7 +60,7 @@ function update_cluster_wavelet_params_besov(idx::Vector{Int}, precomp, M::Int, 
             ll_slab = -0.5 .* sum(log.(2π * v_slab) .+ (Dsub .^ 2) ./ v_slab; dims = 2)
             logit_val = log(pi_j) .+ ll_slab .- (log(1 - pi_j) .+ ll_spike)
             p1 = logistic.(clamp.(logit_val, -35, 35))
-            gam[ids] = Int.(rand.(Bernoulli.(vec(p1))))
+            gam[ids] = Int.(Base.rand.(Bernoulli.(vec(p1))))
         end
         if length(s_name) == 1
             ids_s = maps[m].idx[Symbol(s_name[1])]
@@ -91,7 +90,7 @@ function update_cluster_wavelet_params_besov(idx::Vector{Int}, precomp, M::Int, 
         end
         shape_post = shape0 + 0.5 * n_sel_total
         rate_post = rate0 + 0.5 * ss_over_sigma
-        wpar.g_level[lev] = rand(InverseGamma(shape_post, 1 / rate_post))
+        wpar.g_level[lev] = Base.rand(InverseGamma(shape_post, 1 / rate_post))
     end
 
     # 3) pi_level updates
@@ -109,7 +108,7 @@ function update_cluster_wavelet_params_besov(idx::Vector{Int}, precomp, M::Int, 
             n1 += count(==(1), gm)
             n0 += count(==(0), gm)
         end
-        wpar.pi_level[lev] = rand(Beta(a0 + n1, b0 + n0))
+        wpar.pi_level[lev] = Base.rand(Beta(a0 + n1, b0 + n0))
     end
 
     # 4) beta sampling
@@ -129,7 +128,7 @@ function update_cluster_wavelet_params_besov(idx::Vector{Int}, precomp, M::Int, 
             is_on = gam[ids] .== 1
             if any(is_on)
                 dists = Normal.(mean_post[is_on], sqrt(var_post))
-                beta_ch[m][ids[is_on]] = rand.(dists)
+                beta_ch[m][ids[is_on]] = Base.rand.(dists)
             end
         end
         if length(s_name) == 1
@@ -137,7 +136,7 @@ function update_cluster_wavelet_params_besov(idx::Vector{Int}, precomp, M::Int, 
             if !isempty(ids_s)
                 Dbar_s = vec(mean(Dm[ids_s, :]; dims = 2))
                 dists_s = Normal.(Dbar_s, sqrt(sigma2_m[m] / N))
-                beta_ch[m][ids_s] = rand.(dists_s)
+                beta_ch[m][ids_s] = Base.rand.(dists_s)
             end
         end
     end
@@ -151,11 +150,11 @@ function update_cluster_wavelet_params_besov(idx::Vector{Int}, precomp, M::Int, 
         ss_m = sum(resid .^ 2)
         shape_post = a_sig + 0.5 * n_eff_m
         rate_post = b_sig * tau_sigma + 0.5 * ss_m
-        sigma2_m_new[m] = rand(InverseGamma(shape_post, 1 / rate_post))
+        sigma2_m_new[m] = Base.rand(InverseGamma(shape_post, 1 / rate_post))
     end
     a_post = a_tau + M * a_sig
     b_post = b_tau + b_sig * sum(1 ./ sigma2_m_new)
-    tau_sigma_new = rand(Gamma(a_post, 1 / b_post))
+    tau_sigma_new = Base.rand(Gamma(a_post, 1 / b_post))
 
     (wpar = wpar, beta_ch = beta_ch, sigma2_m = sigma2_m_new, tau_sigma = tau_sigma_new, maps = maps)
 end

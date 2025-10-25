@@ -5,7 +5,6 @@ using ..Kernels
 using ..WaveletOps
 using ..ICMCache
 using LinearAlgebra
-using Random
 using Distributions
 
 export AcceptCount, AcceptanceTracker, WaveletParams, ClusterParams,
@@ -68,12 +67,12 @@ function draw_new_cluster_params(M::Int, P::Int, t, kernels::Vector{KernelConfig
     beta_ch = [zeros(ncoeff) for _ in 1:M]
     pi_level = Dict(name => 0.5 for name in det_names)
     g_level = Dict(name => 2.0 for name in det_names)
-    gamma_ch = [collect(rand(Binomial(1, 0.2), ncoeff)) for _ in 1:M]
+    gamma_ch = [collect(Base.rand(Binomial(1, 0.2), ncoeff)) for _ in 1:M]
     thetas = [kc.pstar() for kc in kernels]
     wpar = WaveletParams(lev_names, pi_level, g_level, gamma_ch)
     ClusterParams(
         wpar,
-        rand(1:length(kernels)),
+        Base.rand(1:length(kernels)),
         thetas,
         Matrix{Float64}(I, M, M),
         fill(0.05, M),
