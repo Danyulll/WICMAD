@@ -98,8 +98,11 @@ unpack_L <- function(theta, m) {
 }
 
 as_num_mat <- function(A) {
-  if (!is.matrix(A)) A <- as.matrix(A)
-  storage.mode(A) <- "double"
+  if (!is.matrix(A)) {
+    A <- as.matrix(A)
+  } else if (storage.mode(A) != "double") {
+    storage.mode(A) <- "double"
+  }
   A
 }
 

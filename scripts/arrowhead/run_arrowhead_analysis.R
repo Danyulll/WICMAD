@@ -231,10 +231,9 @@ prepare_wicmad_data <- function(series_list, labels) {
   
   n_series <- length(series_list)
   
-  # Find the highest power of 2 supported by the data
-  max_dim <- max(sapply(series_list, nrow))
-  p_dim <- 2^floor(log2(max_dim))
-  cat("Using p parameter (highest power of 2):", p_dim, "\n")
+  # Use p=32 for higher resolution
+  p_dim <- 32
+  cat("Using p parameter (specified):", p_dim, "\n")
   
   # Interpolate each series to p dimensions
   interpolated_series <- list()
@@ -258,10 +257,9 @@ prepare_derivative_data <- function(series_list, labels) {
   
   n_series <- length(series_list)
   
-  # Find the highest power of 2 supported by the data
-  max_dim <- max(sapply(series_list, nrow))
-  p_dim <- 2^floor(log2(max_dim))
-  cat("Using p parameter for derivatives (highest power of 2):", p_dim, "\n")
+  # Use p=32 for higher resolution
+  p_dim <- 32
+  cat("Using p parameter for derivatives (specified):", p_dim, "\n")
   
   # Interpolate original data to p dimensions
   original_interp <- matrix(0, nrow = n_series, ncol = p_dim)
@@ -567,10 +565,15 @@ main <- function() {
   wicmad_result <- wicmad(
     Y = wicmad_data$Y,
     t = wicmad_data$t,
-    n_iter = 8000,
-    burn = 3000,
+    n_iter = 5000,
+    burn = 2000,
+    thin = 1,
     warmup_iters = 500,
-    unpin = FALSE
+    unpin = FALSE,
+    alpha_prior = c(5, 1),
+    kappa_pi = 0.3,
+    c2 = 0.5,
+    tau_pi = 10
   )
   
   # Extract cluster assignments
@@ -654,10 +657,15 @@ main <- function() {
   deriv_wicmad_result <- wicmad(
     Y = deriv_wicmad_data$Y,
     t = deriv_wicmad_data$t,
-    n_iter = 8000,
-    burn = 3000,
+    n_iter = 5000,
+    burn = 2000,
+    thin = 1,
     warmup_iters = 500,
-    unpin = FALSE
+    unpin = FALSE,
+    alpha_prior = c(5, 1),
+    kappa_pi = 0.3,
+    c2 = 0.5,
+    tau_pi = 10
   )
   
   # Extract cluster assignments

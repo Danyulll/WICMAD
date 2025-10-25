@@ -114,11 +114,25 @@ fast_icm_loglik_curve <- function(y_resid, cache) {
   if (P_y != P_ch)
     stop(sprintf("Cache dimension mismatch: y rows=%d, chol blocks=%d.", P_y, P_ch))
 
+  # Use C++ implementation for maximum performance
+  if (requireNamespace("RcppEigen", quietly = TRUE)) {
+    tryCatch({
+      return(fast_icm_loglik_curve_eigen(y_resid, cache$Ux_x, cache$chol_list, cache$logdet_sum))
+    }, error = function(e) {
+      warning("C++ implementation failed, falling back to R: ", e$message)
+    })
+  }
+  
+  # Fallback to optimized R implementation
   Ytil <- t(cache$Ux_x) %*% y_resid
   quad <- 0
+  # Pre-allocate vectors to avoid repeated memory allocation
+  M <- ncol(y_resid)
+  v <- numeric(M)
   for (j in 1:P_ch) {
     Lj <- cache$chol_list[[j]]
-    v  <- as.numeric(Ytil[j, ])
+    # Reuse pre-allocated vector instead of creating new one each iteration
+    v[] <- Ytil[j, ]  # Fill existing vector instead of as.numeric(Ytil[j, ])
     w  <- backsolve(Lj, forwardsolve(t(Lj), v, upper.tri=TRUE, transpose=TRUE))
     quad <- quad + sum(w*w)
   }

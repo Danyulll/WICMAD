@@ -25,6 +25,17 @@
 #' reconstructed <- wt_inverse_1d(result$coeff, result$map)
 wt_forward_1d <- function(y, wf = "la8", J = NULL, boundary = "periodic") {
   P <- length(y); J <- ensure_dyadic_J(P, J)
+  
+  # Use C++ implementation for maximum performance
+  if (requireNamespace("RcppEigen", quietly = TRUE)) {
+    tryCatch({
+      return(fast_wavelet_forward_1d(y, wf, J, boundary))
+    }, error = function(e) {
+      warning("C++ wavelet implementation failed, falling back to R: ", e$message)
+    })
+  }
+  
+  # Fallback to R implementation
   w <- waveslim::dwt(y, wf=wf, n.levels=J, boundary=boundary)
   vec <- c(w$d1); idx <- list(d1 = seq_along(w$d1)); off <- length(w$d1)
   if (J >= 2) for (lev in 2:J) {
@@ -56,6 +67,16 @@ wt_forward_1d <- function(y, wf = "la8", J = NULL, boundary = "periodic") {
 #' reconstructed <- wt_inverse_1d(result$coeff, result$map)
 #' all.equal(y, reconstructed)  # Should be TRUE
 wt_inverse_1d <- function(coeff_vec, map) {
+  # Use C++ implementation for maximum performance
+  if (requireNamespace("RcppEigen", quietly = TRUE)) {
+    tryCatch({
+      return(fast_wavelet_inverse_1d(coeff_vec, map))
+    }, error = function(e) {
+      warning("C++ wavelet implementation failed, falling back to R: ", e$message)
+    })
+  }
+  
+  # Fallback to R implementation
   J <- map$J
   w <- vector("list", J + 1L)
   names(w) <- c(paste0("d", 1:J), paste0("s", J))

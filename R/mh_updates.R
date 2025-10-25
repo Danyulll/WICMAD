@@ -9,9 +9,17 @@
 #' @param cache ICM cache object
 #' @return Numeric total log-likelihood
 sum_ll_curves <- function(curves, cache) {
-  s <- 0
-  for (y in curves) s <- s + fast_icm_loglik_curve(y, cache)
-  s
+  # Use C++ batch implementation for maximum performance
+  if (requireNamespace("RcppEigen", quietly = TRUE)) {
+    tryCatch({
+      return(sum(fast_icm_loglik_curves_batch(curves, cache$Ux_x, cache$chol_list, cache$logdet_sum)))
+    }, error = function(e) {
+      warning("C++ batch implementation failed, falling back to R: ", e$message)
+    })
+  }
+  
+  # Fallback to optimized R implementation
+  sum(sapply(curves, function(y) fast_icm_loglik_curve(y, cache)))
 }
 
 #' Update Kernel Parameters via Metropolis-Hastings

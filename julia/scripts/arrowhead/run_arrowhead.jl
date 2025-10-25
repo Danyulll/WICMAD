@@ -10,9 +10,26 @@ using StatsBase: countmap
 using TOML
 using Printf
 using WICMAD
+using Interpolations
 
 include(joinpath(@__DIR__, "..", "common.jl"))
 using .ScriptUtils
+
+# Linear interpolation function for time series using Interpolations.jl
+function interpolate_series(series::Matrix{Float64}, t_old::Vector{Float64}, t_new::Vector{Float64})
+    n_dims = size(series, 2)
+    n_new = length(t_new)
+    new_series = zeros(Float64, n_new, n_dims)
+    
+    for dim in 1:n_dims
+        # Create linear interpolation object
+        itp = LinearInterpolation(t_old, series[:, dim], extrapolation_bc=Line())
+        # Evaluate at new time points
+        new_series[:, dim] = itp.(t_new)
+    end
+    
+    return new_series
+end
 
 struct ArrowheadConfig
     data_dir::String
@@ -46,7 +63,9 @@ function usage()
 end
 
 function parse_args(args::Vector{String})
-    default_dir = joinpath(@__DIR__, "..", "..", "data", "ArrowHead")
+    # Try to find the data directory relative to the project root
+    project_root = joinpath(@__DIR__, "..", "..", "..")
+    default_dir = joinpath(project_root, "data", "ArrowHead")
     data_dir = default_dir
     anomaly_ratio = 0.10
     reveal_ratio = 0.15
@@ -110,7 +129,9 @@ function parse_args(args::Vector{String})
         i += 1
     end
     if data_dir == default_dir && !isdir(data_dir)
-        @warn "Default ArrowHead data directory not found" data_dir
+        @warn "Default ArrowHead data directory not found: $data_dir"
+        @warn "Please specify --data-dir PATH to point to the directory containing ArrowHead_TRAIN.ts and ArrowHead_TEST.ts"
+        @warn "Example: --data-dir \"C:\\Users\\danie\\Desktop\\WICMAD\\data\\ArrowHead\""
     end
     ArrowheadConfig(data_dir, anomaly_ratio, reveal_ratio, seed, n_iter, burn, thin, warmup, diagnostics, mean_intercept, metrics_path)
 end
@@ -187,7 +208,7 @@ function macro_metrics(metrics::Dict{Int,Dict{Symbol,Float64}})
     )
 end
 
-function print_metrics(metrics_per_class::Dict{Int,Dict{Symbol,Float64}}, macro::Dict{Symbol,Float64}, cm)
+function print_metrics(metrics_per_class::Dict{Int,Dict{Symbol,Float64}}, macro_metrics::Dict{Symbol,Float64}, cm)
     println("\nBinary classification metrics (truth rows x predicted columns):")
     println("  Confusion matrix:")
     println(@sprintf("      Truth=0 -> [%4d %4d]", cm[1, 1], cm[1, 2]))
@@ -201,13 +222,13 @@ function print_metrics(metrics_per_class::Dict{Int,Dict{Symbol,Float64}}, macro:
         println(@sprintf("    F1 score: %.4f", m[:f1]))
         println(@sprintf("    Accuracy: %.4f", m[:accuracy]))
     end
-    if !isempty(macro)
+    if !isempty(macro_metrics)
         println("\n  Macro averages:")
-        println(@sprintf("    Precision: %.4f", macro[:macro_precision]))
-        println(@sprintf("    Recall: %.4f", macro[:macro_recall]))
-        println(@sprintf("    Specificity: %.4f", macro[:macro_specificity]))
-        println(@sprintf("    F1 score: %.4f", macro[:macro_f1]))
-        println(@sprintf("    Accuracy: %.4f", macro[:macro_accuracy]))
+        println(@sprintf("    Precision: %.4f", macro_metrics[:macro_precision]))
+        println(@sprintf("    Recall: %.4f", macro_metrics[:macro_recall]))
+        println(@sprintf("    Specificity: %.4f", macro_metrics[:macro_specificity]))
+        println(@sprintf("    F1 score: %.4f", macro_metrics[:macro_f1]))
+        println(@sprintf("    Accuracy: %.4f", macro_metrics[:macro_accuracy]))
     end
 end
 
@@ -223,6 +244,15 @@ end
 function main(args)
     cfg = parse_args(args)
     rng = MersenneTwister(cfg.seed)
+    
+    # Check if data directory exists before trying to load
+    if !isdir(cfg.data_dir)
+        println("ERROR: Data directory not found: $(cfg.data_dir)")
+        println("Please run the script with --data-dir argument pointing to the ArrowHead data directory.")
+        println("Example: julia run_arrowhead.jl --data-dir \"C:\\Users\\danie\\Desktop\\WICMAD\\data\\ArrowHead\"")
+        return
+    end
+    
     println("Loading ArrowHead dataset from $(cfg.data_dir)...")
     raw = ScriptUtils.load_ucr_dataset("ArrowHead", cfg.data_dir)
     prepped = ScriptUtils.prepare_anomaly_dataset(raw; anomaly_ratio = cfg.anomaly_ratio, rng = rng)
@@ -234,6 +264,30 @@ function main(args)
         println("Anomaly class labels: " * join(prepped.anomaly_labels, ", "))
     end
     t = ScriptUtils.default_time_index(prepped.series)
+    
+    # Interpolate data to nearest power of 2 for WICMAD compatibility
+    original_length = length(t)
+    target_length = 2^Int(ceil(log2(original_length)))
+    if original_length != target_length
+        println("Interpolating time series from $original_length to $target_length points for WICMAD compatibility")
+        
+        # Create new time indices for interpolation
+        t_old = collect(1.0:original_length)
+        t_new = collect(range(1.0, original_length, length=target_length))
+        
+        # Interpolate each series
+        interpolated_series = [interpolate_series(series, t_old, t_new) for series in prepped.series]
+        prepped = ScriptUtils.PreparedDataset(
+            interpolated_series,
+            prepped.binary_labels,
+            prepped.original_labels,
+            prepped.normal_label,
+            prepped.anomaly_labels,
+            prepped.index_map
+        )
+        t = t_new
+    end
+    
     reveal_idx = select_revealed_indices(prepped.binary_labels, cfg.reveal_ratio, rng)
     if !isempty(reveal_idx)
         println("Revealing $(length(reveal_idx)) anomalies to the sampler")
@@ -247,6 +301,7 @@ function main(args)
         diagnostics = cfg.diagnostics,
         revealed_idx = reveal_idx,
         mean_intercept = cfg.mean_intercept,
+        wf = "haar",  # Use Haar wavelet
     )
     Z = result.Z
     samples = size(Z, 1)
@@ -262,8 +317,8 @@ function main(args)
     for cls in sort(unique(truth))
         metrics_per_class[cls] = class_metric(truth, binary_preds, cls)
     end
-    macro = macro_metrics(metrics_per_class)
-    print_metrics(metrics_per_class, macro, cm)
+    macro_metrics_result = macro_metrics(metrics_per_class)
+    print_metrics(metrics_per_class, macro_metrics_result, cm)
     if cfg.metrics_path !== nothing
         summary = Dict(
             "dataset" => "ArrowHead",
@@ -284,10 +339,10 @@ function main(args)
             "ari" => ari,
             "confusion_matrix" => [[cm[1,1], cm[1,2]], [cm[2,1], cm[2,2]]],
             "class_metrics" => Dict(string(k) => Dict(string(sym) => metrics_per_class[k][sym] for sym in keys(metrics_per_class[k])) for k in keys(metrics_per_class)),
-            "macro_metrics" => Dict(string(sym) => macro[sym] for sym in keys(macro)),
+            "macro_metrics" => Dict(string(sym) => macro_metrics_result[sym] for sym in keys(macro_metrics_result)),
         )
         record_metrics(cfg.metrics_path, cfg, summary)
     end
 end
 
-isinteractive() || main(ARGS)
+main(ARGS)

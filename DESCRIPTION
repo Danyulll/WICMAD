@@ -19,7 +19,12 @@ Imports:
     invgamma,
     waveslim,
     ggplot2,
-    coda
+    coda,
+    Rcpp,
+    RcppEigen
+LinkingTo:
+    Rcpp,
+    RcppEigen
 Suggests:
     knitr,
     rmarkdown

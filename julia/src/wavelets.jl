@@ -2,6 +2,7 @@ module WaveletOps
 
 using ..Utils
 using Wavelets
+using Wavelets: WT
 using LinearAlgebra
 
 export WaveletMap, WaveletCoefficients, wt_forward_1d, wt_inverse_1d, wt_forward_mat,

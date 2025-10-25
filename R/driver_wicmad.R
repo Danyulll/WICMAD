@@ -302,7 +302,12 @@ wicmad <- function(
             compute_mu_from_beta(params[[k]]$beta_ch, wf, J, boundary, P)
           } else matrix(0, P, M)
           mu_k <- add_bias_to_mu(mu_wave, params[[k]]$bias)
-          params[[k]]$mu_cached <- as_num_mat(mu_k)
+          # Only convert to matrix if not already a matrix or if storage mode is wrong
+          if (!is.matrix(mu_k) || storage.mode(mu_k) != "double") {
+            params[[k]]$mu_cached <- as_num_mat(mu_k)
+          } else {
+            params[[k]]$mu_cached <- mu_k
+          }
           params[[k]]$mu_cached_iter <- iter
         }
         ll <- ll_curve_k(k, Y[[i]], params[[k]]$mu_cached)
@@ -355,7 +360,12 @@ wicmad <- function(
         params[[k]]$bias <- sample_bias(k, idx, mu_wave)
       }
       mu_k <- add_bias_to_mu(mu_wave, params[[k]]$bias)
-      params[[k]]$mu_cached      <- as_num_mat(mu_k)
+      # Only convert to matrix if not already a matrix or if storage mode is wrong
+      if (!is.matrix(mu_k) || storage.mode(mu_k) != "double") {
+        params[[k]]$mu_cached <- as_num_mat(mu_k)
+      } else {
+        params[[k]]$mu_cached <- mu_k
+      }
       params[[k]]$mu_cached_iter <- iter
 
       # ===== KERNEL AND ICM UPDATES =====

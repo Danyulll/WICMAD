@@ -1,3 +1,6 @@
+useDynLib(WICMAD)
+importFrom(Rcpp, evalCpp)
+
 export(wicmad)
 export(build_diagnostics)
 export(plot_diagnostics)
