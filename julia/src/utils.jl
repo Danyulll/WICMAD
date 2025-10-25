@@ -1,7 +1,6 @@
 module Utils
 
 using LinearAlgebra
-using Random
 using StatsBase
 using StatsFuns: logit, logistic
 using Distances
@@ -70,7 +69,7 @@ end
 function extend_sticks_until(v::Vector{Float64}, alpha::Float64, threshold::Float64)
     tail = prod(1 .- v)
     while tail > threshold
-        v_new = rand(Beta(1, alpha))
+        v_new = Base.rand(Beta(1, alpha))
         push!(v, v_new)
         tail *= (1 - v_new)
     end
@@ -84,7 +83,7 @@ function update_v_given_z(v::Vector{Float64}, z::Vector{Int}, alpha::Float64)
     for k in 1:K
         a = 1 + counts[k]
         b = alpha + (k < K ? tail_counts[k + 1] : 0)
-        v[k] = rand(Beta(a, b))
+        v[k] = Base.rand(Beta(a, b))
     end
     v
 end
