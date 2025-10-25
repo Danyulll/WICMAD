@@ -21,10 +21,16 @@ struct WaveletCoefficients
     map::WaveletMap
 end
 
+const _WAVELET_ALIASES = Dict(
+    "haar" => :haar,
+    "db1" => :haar,
+)
+
 function wavelet_from_string(wf::String)
     sym = Symbol(lowercase(wf))
-    if hasproperty(WT, sym)
-        return wavelet(getproperty(WT, sym))
+    sym = get(_WAVELET_ALIASES, String(sym), sym)
+    if isdefined(WT, sym)
+        return wavelet(getfield(WT, sym))
     else
         error("Unsupported wavelet family $wf")
     end
