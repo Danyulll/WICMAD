@@ -9,9 +9,7 @@ using Distributions
 
 export scale_t01, dist_rows, nloc, ensure_dyadic_J, logit_safe, invlogit_safe,
        stick_to_pi, extend_sticks_until, update_v_given_z, pack_L, unpack_L,
-       as_num_mat, normalize_t, eig_Kx, eig_Bshape, project_curve, (%||%)
-
-(%||%)(a, b) = isnothing(a) ? b : a
+       as_num_mat, normalize_t, eig_Kx, eig_Bshape, project_curve
 
 function scale_t01(t::AbstractVector)
     mn = minimum(t); mx = maximum(t)
