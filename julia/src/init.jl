@@ -90,7 +90,7 @@ function draw_new_cluster_params(M::Int, P::Int, t, kernels::Vector{KernelConfig
 end
 
 function ensure_complete_cache!(cp::ClusterParams, kernels::Vector{KernelConfig}, t, M::Int)
-    if length(cp.eta) != M || any(!isfinite.(cp.eta))
+    if length(cp.eta) != M || any(.!isfinite.(cp.eta))
         cp.eta = fill(0.05, M)
     end
     if !isfinite(cp.tau_B) || cp.tau_B <= 0

@@ -52,9 +52,9 @@ function usage()
     println("  --anomaly-ratio R        Target anomaly ratio in (0,1); default 0.10")
     println("  --reveal-ratio R         Fraction of anomalies to reveal to the sampler; default 0.15")
     println("  --seed N                 RNG seed (default 1)")
-    println("  --n-iter N               Total MCMC iterations (default 8000)")
-    println("  --burn N                 Burn-in iterations (default 3000)")
-    println("  --thin N                 Thinning interval (default 5)")
+    println("  --n-iter N               Total MCMC iterations (default 100)")
+    println("  --burn N                 Burn-in iterations (default 50)")
+    println("  --thin N                 Thinning interval (default 1)")
     println("  --warmup N               Warmup iterations passed to WICMAD (default 500)")
     println("  --mean-intercept         Enable mean-intercept sampling")
     println("  --no-diagnostics         Disable diagnostic collection")
@@ -70,9 +70,9 @@ function parse_args(args::Vector{String})
     anomaly_ratio = 0.10
     reveal_ratio = 0.15
     seed = 1
-    n_iter = 8000
-    burn = 3000
-    thin = 5
+    n_iter = 5000
+    burn = 2000
+    thin = 1
     warmup = 500
     diagnostics = true
     mean_intercept = false
@@ -265,9 +265,9 @@ function main(args)
     end
     t = ScriptUtils.default_time_index(prepped.series)
     
-    # Interpolate data to nearest power of 2 for WICMAD compatibility
+    # Interpolate data to 32 points for WICMAD compatibility
     original_length = length(t)
-    target_length = 2^Int(ceil(log2(original_length)))
+    target_length = 32
     if original_length != target_length
         println("Interpolating time series from $original_length to $target_length points for WICMAD compatibility")
         
@@ -293,6 +293,7 @@ function main(args)
         println("Revealing $(length(reveal_idx)) anomalies to the sampler")
     end
     println("\nRunning WICMAD with n_iter=$(cfg.n_iter), burn=$(cfg.burn), thin=$(cfg.thin)...")
+    println("="^60)
     result = wicmad(prepped.series, t;
         n_iter = cfg.n_iter,
         burn = cfg.burn,
@@ -303,6 +304,8 @@ function main(args)
         mean_intercept = cfg.mean_intercept,
         wf = "haar",  # Use Haar wavelet
     )
+    println("="^60)
+    println("WICMAD algorithm completed!")
     Z = result.Z
     samples = size(Z, 1)
     println("Samples retained: $(samples)")

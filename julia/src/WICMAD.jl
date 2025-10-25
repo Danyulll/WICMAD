@@ -201,6 +201,11 @@ function wicmad(
     end
 
     sidx = 0
+    
+    # Progress reporting setup
+    progress_interval = 100  # Report every 100 iterations
+    println("Starting WICMAD MCMC with $n_iter iterations...")
+    println("Progress: 0% (0/$n_iter)")
 
     for iter in 1:n_iter
         pi = Utils.stick_to_pi(v)
@@ -287,6 +292,12 @@ function wicmad(
             alpha = Base.rand(Gamma(alpha_prior[1] + Kocc - 1, 1 / (alpha_prior[2] - log(eta_aux))))
         end
 
+        # Progress reporting
+        if iter % progress_interval == 0 || iter == n_iter
+            progress_pct = round(100 * iter / n_iter, digits=1)
+            println("Progress: $(progress_pct)% ($iter/$n_iter) - Current clusters: $Kocc")
+        end
+
         if keep > 0 && iter > burn && ((iter - burn) % thin == 0)
             sidx += 1
             Z_s[sidx, :] = z
@@ -314,6 +325,10 @@ function wicmad(
             end
         end
     end
+    
+    # Calculate final number of clusters
+    final_Kocc = length(unique(z))
+    println("MCMC completed! Final clusters: $final_Kocc, Samples collected: $sidx")
 
     (; Z = Z_s, alpha = alpha_s, kern = kern_s, params = params, v = v, pi = Utils.stick_to_pi(v),
         revealed_idx = revealed_idx, K_occ = K_s, loglik = loglik_s, diagnostics = diag)

@@ -26,55 +26,103 @@ const _WAVELET_ALIASES = Dict(
     "db1" => :haar,
 )
 
-function wavelet_from_string(wf::String)
+function wavelet_from_string(wf::String, boundary::String = "periodic")
     sym = Symbol(lowercase(wf))
     sym = get(_WAVELET_ALIASES, String(sym), sym)
     if isdefined(WT, sym)
-        return wavelet(getfield(WT, sym))
+        ext = extension_from_string(boundary)
+        return wavelet(getfield(WT, sym), WT.Filter, ext)
     else
         error("Unsupported wavelet family $wf")
     end
 end
 
 function extension_from_string(boundary::String)
-    boundary == "periodic" && return Periodic()
-    boundary == "reflection" && return Symmetric()
+    boundary == "periodic" && return WT.Periodic
+    boundary == "reflection" && return WT.Symmetric
     error("Unsupported boundary $boundary; use \"periodic\" or \"reflection\".")
 end
 
 function wt_forward_1d(y::AbstractVector; wf::String = "la8", J::Union{Nothing,Int} = nothing, boundary::String = "periodic")
     P = length(y)
     Jv = Utils.ensure_dyadic_J(P, J)
-    wave = wavelet_from_string(wf)
-    ext = extension_from_string(boundary)
-    wt = dwt(Float64.(y), wave, Jv; extension = ext)
+    wave = wavelet_from_string(wf, boundary)
+    wt = dwt(Float64.(y), wave, Jv)
+    
+    # The dwt function returns a flat vector of coefficients
+    # We need to organize them into detail and approximation coefficients
     coeffs_vec = Float64[]
     idx = Dict{Symbol,UnitRange{Int}}()
     offset = 0
+    
+    # Extract detail coefficients for each level
     for lev in 1:Jv
-        d = detail(wt, lev)
-        append!(coeffs_vec, d)
-        idx[Symbol("d" * string(lev))] = offset + 1:offset + length(d)
-        offset += length(d)
+        if lev == 1
+            start_idx = 1
+            end_idx = detailindex(P, 1, Jv) - 1
+        else
+            start_idx = detailindex(P, lev-1, Jv)
+            end_idx = detailindex(P, lev, Jv) - 1
+        end
+        
+        if start_idx <= end_idx
+            d = wt[start_idx:end_idx]
+            append!(coeffs_vec, d)
+            idx[Symbol("d" * string(lev))] = offset + 1:offset + length(d)
+            offset += length(d)
+        end
     end
-    s = approx(wt)
+    
+    # Extract approximation coefficients
+    approx_start = detailindex(P, Jv, Jv)
+    s = wt[approx_start:end]
     append!(coeffs_vec, s)
     idx[Symbol("s" * string(Jv))] = offset + 1:offset + length(s)
+    
     WaveletCoefficients(coeffs_vec, WaveletMap(Jv, wf, boundary, P, idx))
 end
 
 function wt_inverse_1d(coeff_vec::AbstractVector, map::WaveletMap)
-    wave = wavelet_from_string(map.wf)
-    ext = extension_from_string(map.boundary)
-    details = Vector{Vector{Float64}}(undef, map.J)
+    wave = wavelet_from_string(map.wf, map.boundary)
+    
+    # Reconstruct the flat coefficient vector in the format expected by idwt
+    wt_reconstructed = zeros(Float64, map.P)
+    
+    # Reconstruct detail coefficients
     for lev in 1:map.J
         key = Symbol("d" * string(lev))
-        ids = map.idx[key]
-        details[lev] = collect(coeff_vec[ids])
+        if haskey(map.idx, key)
+            ids = map.idx[key]
+            detail_coeffs = collect(coeff_vec[ids])
+            
+            # Place detail coefficients in the correct positions
+            if lev == 1
+                start_idx = 1
+                end_idx = detailindex(map.P, 1, map.J) - 1
+            else
+                start_idx = detailindex(map.P, lev-1, map.J)
+                end_idx = detailindex(map.P, lev, map.J) - 1
+            end
+            
+            if start_idx <= end_idx && length(detail_coeffs) > 0
+                wt_reconstructed[start_idx:end_idx] = detail_coeffs
+            end
+        end
     end
-    approx_coeffs = collect(coeff_vec[map.idx[Symbol("s" * string(map.J))]])
-    wt = WaveletTransform(wave, approx_coeffs, details, ext)
-    idwt(wt)
+    
+    # Reconstruct approximation coefficients
+    approx_key = Symbol("s" * string(map.J))
+    if haskey(map.idx, approx_key)
+        ids = map.idx[approx_key]
+        approx_coeffs = collect(coeff_vec[ids])
+        approx_start = detailindex(map.P, map.J, map.J)
+        if length(approx_coeffs) > 0
+            wt_reconstructed[approx_start:end] = approx_coeffs
+        end
+    end
+    
+    # Perform inverse transform
+    idwt(wt_reconstructed, wave, map.J)
 end
 
 function wt_forward_mat(y_mat::AbstractMatrix; wf::String = "la8", J::Union{Nothing,Int} = nothing, boundary::String = "periodic")

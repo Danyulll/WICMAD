@@ -78,7 +78,7 @@ end
 
 function update_v_given_z(v::Vector{Float64}, z::Vector{Int}, alpha::Float64)
     K = length(v)
-    counts = counts(z, 1:K)
+    counts = [count(==(k), z) for k in 1:K]
     tail_counts = reverse(cumsum(reverse(counts)))
     for k in 1:K
         a = 1 + counts[k]
