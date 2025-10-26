@@ -11,6 +11,7 @@ using TOML
 using Printf
 using WICMAD
 using Interpolations
+using Plots
 
 include(joinpath(@__DIR__, "..", "common.jl"))
 using .ScriptUtils
@@ -43,6 +44,8 @@ struct ArrowheadConfig
     diagnostics::Bool
     mean_intercept::Bool
     metrics_path::Union{Nothing,String}
+    plots_dir::Union{Nothing,String}
+    show_plots::Bool
 end
 
 function usage()
@@ -59,6 +62,8 @@ function usage()
     println("  --mean-intercept         Enable mean-intercept sampling")
     println("  --no-diagnostics         Disable diagnostic collection")
     println("  --metrics PATH           Optional TOML file to record dataset metrics")
+    println("  --plots-dir PATH         Directory to save plots (default: plots/arrowhead)")
+    println("  --no-plots               Disable plotting")
     println("  --help                   Show this message")
 end
 
@@ -69,7 +74,7 @@ function parse_args(args::Vector{String})
     data_dir = default_dir
     anomaly_ratio = 0.10
     reveal_ratio = 0.15
-    seed = 1
+    seed = 
     n_iter = 5000
     burn = 2000
     thin = 1
@@ -77,6 +82,8 @@ function parse_args(args::Vector{String})
     diagnostics = true
     mean_intercept = false
     metrics_path = nothing
+    plots_dir = joinpath(project_root, "plots", "arrowhead")
+    show_plots = true
     i = 1
     while i <= length(args)
         arg = args[i]
@@ -120,6 +127,12 @@ function parse_args(args::Vector{String})
             i += 1
             i > length(args) && error("--metrics requires a value")
             metrics_path = args[i]
+        elseif arg == "--plots-dir"
+            i += 1
+            i > length(args) && error("--plots-dir requires a value")
+            plots_dir = args[i]
+        elseif arg == "--no-plots"
+            show_plots = false
         elseif arg in ("--help", "-h")
             usage()
             exit(0)
@@ -133,7 +146,7 @@ function parse_args(args::Vector{String})
         @warn "Please specify --data-dir PATH to point to the directory containing ArrowHead_TRAIN.ts and ArrowHead_TEST.ts"
         @warn "Example: --data-dir \"C:\\Users\\danie\\Desktop\\WICMAD\\data\\ArrowHead\""
     end
-    ArrowheadConfig(data_dir, anomaly_ratio, reveal_ratio, seed, n_iter, burn, thin, warmup, diagnostics, mean_intercept, metrics_path)
+    ArrowheadConfig(data_dir, anomaly_ratio, reveal_ratio, seed, n_iter, burn, thin, warmup, diagnostics, mean_intercept, metrics_path, plots_dir, show_plots)
 end
 
 function select_revealed_indices(labels::Vector{Int}, reveal_ratio::Float64, rng)
@@ -315,6 +328,21 @@ function main(args)
     println("Normal cluster identified as label $(normal_cluster)")
     ari = WICMAD.adj_rand_index(binary_preds, truth)
     println(@sprintf("Adjusted Rand Index (binary mapping vs truth): %.4f", ari))
+    
+    # Generate plots if enabled
+    if cfg.show_plots
+        println("\nGenerating plots...")
+        try
+            plots_dict = WICMAD.Plotting.plot_clustering_summary(prepped.series, truth, clusters, t; 
+                                                                save_dir=cfg.plots_dir)
+            println("Plots generated successfully!")
+            if cfg.show_plots && isinteractive()
+                display(plots_dict[:comparison])
+            end
+        catch e
+            @warn "Failed to generate plots: $e"
+        end
+    end
     cm = confusion_matrix(truth, binary_preds)
     metrics_per_class = Dict{Int,Dict{Symbol,Float64}}()
     for cls in sort(unique(truth))

@@ -8,6 +8,7 @@ include("init.jl")
 include("mh_updates.jl")
 include("wavelet_block.jl")
 include("postprocessing.jl")
+include("plotting.jl")
 
 using .Utils
 using .Kernels
@@ -17,6 +18,7 @@ using .Init
 using .MHUpdates
 using .WaveletBlock
 using .PostProcessing
+using .Plotting
 
 using LinearAlgebra
 using Distributions
