@@ -315,7 +315,7 @@ function main(args)
         diagnostics = cfg.diagnostics,
         revealed_idx = reveal_idx,
         mean_intercept = cfg.mean_intercept,
-        wf = "haar",  # Use Haar wavelet
+        wf = "beyl",  # Use Haar wavelet
     )
     println("="^60)
     println("WICMAD algorithm completed!")
