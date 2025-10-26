@@ -143,8 +143,8 @@ const PARAMETER_GRID = Dict(
 
 # Experiment configuration
 const EXPERIMENT_CONFIG = Dict(
-    :n_iter => 10,            # MCMC iterations (set to 10 for quick testing)
-    :burn => 5,               # Burn-in iterations
+    :n_iter => 5000,         # MCMC iterations (high-quality production setting)
+    :burn => 1000,           # Burn-in iterations
     :thin => 1,              # Thinning
     :anomaly_ratio => 0.10,  # Ratio of anomalies in dataset
     :target_length => 32,    # Target series length after interpolation
